@@ -110,6 +110,70 @@ writing nothing. **A backup that silently stops is worse than no backup,
 because it manufactures confidence.** "Letzte Sicherung: vor 11 Tagen" is the
 only line that actually tells somebody whether they are safe.
 
+## Drawing the panel — `@lautstark/sicherung/ui`
+
+The three products each drew this panel and each wrote out the same table of
+what to offer in which state. That table is a behavioural contract, and three
+copies with nothing asserting they agree is the arrangement where one of them
+quietly stops offering a way out of `failed`. It lives here now.
+
+```js
+import { actionsFor, ago } from '@lautstark/sicherung/ui';
+
+for (const action of actionsFor(backup, status)) {
+  panel.append(button(t(`folder_${action.id}`), action.primary, action.run));
+}
+```
+
+`actionsFor(backup, status)` returns `{ id, primary, run }` — `id` is one of
+`choose`, `confirm`, `retry`, `forget`. It is a **key, not a label**: the
+product supplies its own word for it.
+
+| status | offers |
+|---|---|
+| `off` | `choose` |
+| `needs-permission` | `confirm`, `forget` |
+| `failed` | `retry`, `forget` |
+| `idle` | `forget` |
+| `saving`, `unsupported` | nothing |
+
+`ago(at, locale, now?)` turns a `lastWrite` into "vor 3 Minuten". It builds its
+formatter per call and **must never cache one**: a product that changes
+language without reloading would go on being answered in the language the
+reader has just left, and the string would stay well-formed the whole time.
+
+### What this module deliberately is not
+
+It returns no text and no DOM.
+
+No text, because bildhaft has no `t()` — an argued position, not an omission:
+it turns *German* sentences into pictograms, so an English shell would front a
+program that only understands German input. A shared module that rendered
+words would force on it exactly the indirection it exists to refuse.
+
+No DOM, because the two shapes genuinely differ — bildhaft builds a node and
+hands it back, mitreden and vorlaut paint into markup their page already has.
+Product layout is identity (design.md §4.4), and a helper serving both would
+be a configuration object pretending to be a component.
+
+It imports nothing at runtime. Both of its imports are types, so the built
+`dist/ui.js` has no imports at all — the inlet rule in `index.ts` is held one
+layer further out by the compiler rather than by a promise.
+
+### The one rule that is not code
+
+The dot's attribute takes `status.kind` **verbatim**:
+
+```js
+line.setAttribute('data-state', status.kind);
+```
+
+No mapping table in the product. A mapping is three chances to disagree about
+what `failed` looks like, invisible until it matters, and `@lautstark/design`
+styles these kinds by name. An unknown kind falls back to the grey `off` dot
+and reads as *deliberately not set up* — which is why a new `Status` kind is a
+major for the CSS as well as for this package.
+
 ## Releasing
 
 A git tag is the release; see [RELEASING.md](RELEASING.md).
