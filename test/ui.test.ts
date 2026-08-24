@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { actionsFor, ago, type Actor } from '../src/ui.js';
+import { actionsFor, ago, needsAttention, type Actor } from '../src/ui.js';
 import type { Status } from '../src/types.js';
 
 /*
@@ -125,6 +125,50 @@ describe('how long ago the last copy was', () => {
       expect(ago(at, 'de')).toMatch(/vor 5 Minuten/);
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+/* Which states are somebody's to act on.
+ *
+ * The table is small and the temptation is to leave it untested. The reason it
+ * is in this package at all is that three products each decided it for
+ * themselves and all three got `needs-permission` wrong - drawn as prose,
+ * beside the states that mean it is working. A test is what makes the answer
+ * one thing rather than four.
+ */
+describe('needsAttention', () => {
+  it('is true where nothing is being written and it will not resume alone', () => {
+    expect(needsAttention({ kind: 'needs-permission', folder: 'S', lastWrite: 1 })).toBe(true);
+    expect(needsAttention({ kind: 'failed', folder: 'S', lastWrite: 1, reason: 'voll' })).toBe(true);
+  });
+
+  it('is false where it is working, or where nothing has been asked for yet', () => {
+    expect(needsAttention({ kind: 'idle', folder: 'S', lastWrite: 1 })).toBe(false);
+    expect(needsAttention({ kind: 'saving', folder: 'S', lastWrite: 1 })).toBe(false);
+    // Nobody has chosen a folder: nothing is broken and nothing is owed.
+    expect(needsAttention({ kind: 'off' })).toBe(false);
+    // And a browser with no picker should not be drawing the panel at all.
+    expect(needsAttention({ kind: 'unsupported' })).toBe(false);
+  });
+
+  /* The pair that has to stay in step: anything needing attention has to offer
+   * a way out of it, or a panel says something is wrong and hands nobody a
+   * button. */
+  it('always comes with something to press', () => {
+    const backup: Actor = {
+      choose: async () => ({ kind: 'off' }),
+      confirm: async () => ({ kind: 'off' }),
+      save: async () => ({ kind: 'off' }),
+      forget: async () => ({ kind: 'off' }),
+    };
+    const states: Status[] = [
+      { kind: 'needs-permission', folder: 'S', lastWrite: null },
+      { kind: 'failed', folder: 'S', lastWrite: null, reason: 'voll' },
+    ];
+    for (const status of states) {
+      expect(needsAttention(status)).toBe(true);
+      expect(actionsFor(backup, status).length).toBeGreaterThan(0);
     }
   });
 });

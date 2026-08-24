@@ -104,6 +104,34 @@ export function actionsFor(backup: Actor, status: Status): Action[] {
 }
 
 /**
+ * Whether this state is one the person has to do something about.
+ *
+ * The sibling of `actionsFor` above, and here for the same reason: it is a
+ * decision every product was making for itself, out of the same status, and
+ * getting differently. All three drew `needs-permission` as one more line of
+ * grey prose beside "gesichert vor 3 Minuten" — which is what it looks like
+ * when a product judges the state rather than reads it.
+ *
+ * `needs-permission` and `failed` are true, and the difference between them is
+ * not the point. What they share is the only thing a panel needs to know: **no
+ * backup is being written, and it will not resume by itself.** A browser
+ * withdrawing the permission on a stored folder is ordinary — Chromium does it
+ * between visits, nothing is lost, and one press puts it back — but "ordinary"
+ * is about whose fault it is, not about whether somebody has to act.
+ *
+ * `off` is false, deliberately. Nobody has chosen a folder, so nothing is
+ * broken and nothing is owed; a product that wants to encourage the choice has
+ * `actionsFor`'s primary button for that. `saving` and `idle` are working, and
+ * `unsupported` is a panel the product should not be drawing at all.
+ *
+ * What a product does with a true is its own: `components.css`'s `.notice.bad`
+ * is what the family draws, and conventions.md §3.7 says what the words have to
+ * cover.
+ */
+export const needsAttention = (status: Status): boolean =>
+  status.kind === 'needs-permission' || status.kind === 'failed';
+
+/**
  * The boundaries at which "how long ago" changes unit, and the divisor for
  * each. Ordered, and read by taking the first whose limit the gap is under.
  */

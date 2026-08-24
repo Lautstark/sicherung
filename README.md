@@ -125,6 +125,11 @@ for (const action of actionsFor(backup, status)) {
 }
 ```
 
+`needsAttention(status)` says whether a state is one the person has to act
+on - `needs-permission` and `failed`, the two in which nothing is being written
+and nothing resumes by itself. A panel draws those as a warning rather than as
+prose; see conventions.md §3.7 in @lautstark/design.
+
 `actionsFor(backup, status)` returns `{ id, primary, run }` — `id` is one of
 `choose`, `confirm`, `retry`, `forget`. It is a **key, not a label**: the
 product supplies its own word for it.
