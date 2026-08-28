@@ -79,6 +79,7 @@ export class Sicherung {
   readonly #app: string;
   readonly #stem: string;
   readonly #produce: () => Promise<unknown>;
+  readonly #looksEmpty: ((produced: unknown) => boolean) | undefined;
   readonly #keep: number;
   readonly #settle: number;
   readonly #now: () => number;
@@ -91,11 +92,14 @@ export class Sicherung {
   #writing: Promise<void> | null = null;
   /** An edit that arrived mid-write. One re-run is enough however many arrive. */
   #dirty = false;
+  /** Set by confirmEmpty(), consumed by the write it permits. Never latched. */
+  #allowEmpty = false;
 
   constructor(options: Options) {
     this.#app = options.app;
     this.#stem = options.stem ?? options.app;
     this.#produce = options.produce;
+    this.#looksEmpty = options.looksEmpty;
     this.#keep = options.keep ?? 14;
     this.#settle = options.settle ?? 4000;
     this.#now = options.now ?? (() => Date.now());
@@ -189,6 +193,26 @@ export class Sicherung {
     return this.#status;
   }
 
+  /**
+   * Answers a `held`: yes, the emptiness is real, save it over the old copy.
+   *
+   * The other answer is not a method. Somebody who did *not* mean to empty
+   * their library fixes the cause — opens the right address, signs back in —
+   * and the next ordinary save goes through on its own, because the export
+   * stops being empty. So there is only a button for the surprising answer,
+   * and doing nothing is the safe one.
+   *
+   * Permission for one write, not a setting: `#allowEmpty` is consumed by the
+   * save below, so the next empty export asks again. Somebody clearing one
+   * collection today has not agreed to lose a different library next month.
+   */
+  async confirmEmpty(): Promise<Status> {
+    if (!this.#folder) return this.#status;
+    this.#allowEmpty = true;
+    await this.save();
+    return this.#status;
+  }
+
   /** Drops the folder and the marks. The files already written stay where they are. */
   async forget(): Promise<Status> {
     if (this.#timer) { clearTimeout(this.#timer); this.#timer = null; }
@@ -251,7 +275,7 @@ export class Sicherung {
       const folder = this.#folder;
       if (!folder) return;
 
-      const { lastWrite, lastDated } = await readMark(this.#app);
+      const { lastWrite, lastDated, lastEmpty = false } = await readMark(this.#app);
       this.#announce({ kind: 'saving', folder: folder.name, lastWrite });
 
       if (!(await this.#has('granted'))) {
@@ -265,7 +289,28 @@ export class Sicherung {
         // gathering its data should leave the previous file intact rather than
         // truncate it. This is also the only line through which anything the
         // product knows reaches this module.
-        const text = JSON.stringify(await this.#produce(), null, 2);
+        const produced = await this.#produce();
+        const empty = this.#looksEmpty?.(produced) ?? false;
+
+        // Nothing to save, over something worth keeping. Hold, and say so.
+        //
+        // Only when there is a copy to lose: with no previous write there is
+        // nothing to protect and an empty first save is just an empty product.
+        // And only when the copy on disk came from something non-empty, or
+        // somebody who genuinely emptied their library would be asked again on
+        // every save forever.
+        //
+        // `#allowEmpty` is the answer to being asked, and it is deliberately
+        // one-shot: it is consumed by the write it permits, so the next empty
+        // export asks again. A latch would turn one "yes, I meant it" into a
+        // standing permission to overwrite, which is the thing this prevents.
+        if (empty && !this.#allowEmpty && lastWrite !== null && !lastEmpty) {
+          this.#announce({ kind: 'held', folder: folder.name, lastWrite });
+          return;
+        }
+        this.#allowEmpty = false;
+
+        const text = JSON.stringify(produced, null, 2);
         const at = this.#now();
         const stamp = dayStamp(at);
 
@@ -278,7 +323,7 @@ export class Sicherung {
           await this.#prune(folder);
         }
 
-        await writeMark(this.#app, { lastWrite: at, lastDated: stamp });
+        await writeMark(this.#app, { lastWrite: at, lastDated: stamp, lastEmpty: empty });
         this.#announce({ kind: 'idle', folder: folder.name, lastWrite: at });
       } catch (error) {
         // The folder is kept. A full disk, a folder the user moved, a file
