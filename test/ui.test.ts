@@ -18,7 +18,11 @@ import type { Status } from '../src/types.js';
 function spy(): Actor & { calls: string[] } {
   const calls: string[] = [];
   const stub = (name: string) => async () => { calls.push(name); return { kind: 'off' } as Status; };
-  return { calls, choose: stub('choose'), confirm: stub('confirm'), save: stub('save'), forget: stub('forget') };
+  return {
+    calls,
+    choose: stub('choose'), confirm: stub('confirm'), confirmEmpty: stub('confirmEmpty'),
+    save: stub('save'), forget: stub('forget'),
+  };
 }
 
 const withFolder = { folder: 'Sicherungen', lastWrite: null };
@@ -159,12 +163,17 @@ describe('needsAttention', () => {
     const backup: Actor = {
       choose: async () => ({ kind: 'off' }),
       confirm: async () => ({ kind: 'off' }),
+      confirmEmpty: async () => ({ kind: 'off' }),
       save: async () => ({ kind: 'off' }),
       forget: async () => ({ kind: 'off' }),
     };
     const states: Status[] = [
       { kind: 'needs-permission', folder: 'S', lastWrite: null },
       { kind: 'failed', folder: 'S', lastWrite: null, reason: 'voll' },
+      // Held is the newest of these and the easiest to leave out: it is the one
+      // that is not about the folder, so a panel written around folder trouble
+      // would never think to draw it.
+      { kind: 'held', folder: 'S', lastWrite: null },
     ];
     for (const status of states) {
       expect(needsAttention(status)).toBe(true);
