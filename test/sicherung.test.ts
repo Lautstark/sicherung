@@ -12,7 +12,7 @@ import { FakeFolder, pickerFor } from './folder.js';
  * store.test.ts, where the value is plain data and clones honestly.
  */
 const folders = new Map<string, unknown>();
-const marks = new Map<string, { lastWrite: number | null; lastDated: string | null }>();
+const marks = new Map<string, { lastWrite: number | null; lastDated: string | null; lastEmpty?: boolean }>();
 
 vi.mock('../src/store.js', () => ({
   readFolder: async (app: string) => folders.get(app) ?? null,
@@ -24,6 +24,7 @@ vi.mock('../src/store.js', () => ({
 }));
 
 const { Sicherung } = await import('../src/index.js');
+const { actionsFor, needsAttention } = await import('../src/ui.js');
 
 /** A clock the tests move by hand, so "one dated copy per day" is testable. */
 function clock(start = Date.parse('2026-08-23T10:00:00')) {
@@ -33,11 +34,13 @@ function clock(start = Date.parse('2026-08-23T10:00:00')) {
 
 function make(folder: FakeFolder | null, options: Partial<{
   produce: () => Promise<unknown>; keep: number; settle: number; now: () => number;
+  looksEmpty: (produced: unknown) => boolean;
 }> = {}) {
   vi.stubGlobal('showDirectoryPicker', pickerFor(folder));
   return new Sicherung({
     app: 'testprodukt',
     produce: options.produce ?? (async () => ({ sentences: ['hallo'] })),
+    looksEmpty: options.looksEmpty,
     keep: options.keep,
     settle: options.settle ?? 0,
     now: options.now,
@@ -260,7 +263,12 @@ describe('the inlet', () => {
       .filter((name) => name !== 'constructor')
       .sort();
     expect(surface).toEqual([
-      'choose', 'confirm', 'forget', 'restore', 'save', 'schedule', 'status', 'subscribe',
+      // `confirmEmpty` was argued for on 2026-08-28 and is the reason this list
+      // is worth its keep: it widened the surface, the test refused the change,
+      // and somebody had to come here and say why. It writes and never reads —
+      // it permits one save that was held back, and takes no argument at all.
+      'choose', 'confirm', 'confirmEmpty', 'forget', 'restore', 'save', 'schedule',
+      'status', 'subscribe',
     ]);
   });
 
@@ -270,5 +278,120 @@ describe('the inlet', () => {
     await make(folder, { produce: async () => payload }).choose();
 
     expect(JSON.parse(folder.files.get('testprodukt-aktuell.json')!)).toEqual(payload);
+  });
+});
+
+
+describe('an empty export over a copy that is not', () => {
+  /*
+   * The failure this exists for, seen on 2026-08-28: four sites moved to new
+   * domains, browser storage is per origin, and every product opened on its new
+   * address found empty storage and saved that over the copy holding the real
+   * thing. bildhaft's -aktuell went to 0 collections beside a dated copy with 3.
+   *
+   * Nothing malfunctioned. The write succeeded and the inlet was correct; the
+   * input was an empty database that looks exactly like a user who deleted
+   * everything. The module cannot tell those apart, so it stops and asks.
+   */
+  const nothing = (v: unknown) => (v as { items: unknown[] }).items.length === 0;
+
+  it('holds the write and leaves the previous copy alone', async () => {
+    const folder = new FakeFolder();
+    let items: string[] = ['eins', 'zwei'];
+    const backup = make(folder, { produce: async () => ({ items }), looksEmpty: nothing });
+
+    await backup.choose();
+    expect(JSON.parse(folder.files.get('testprodukt-aktuell.json')!).items).toHaveLength(2);
+
+    items = [];
+    await backup.save();
+
+    expect(backup.status.kind).toBe('held');
+    // The whole point: what is on disk is still the real thing.
+    expect(JSON.parse(folder.files.get('testprodukt-aktuell.json')!).items).toHaveLength(2);
+  });
+
+  it('says how old the surviving copy is, because that is the useful sentence', async () => {
+    const folder = new FakeFolder();
+    let items: string[] = ['eins'];
+    const backup = make(folder, {
+      produce: async () => ({ items }), looksEmpty: nothing, now: () => 1000,
+    });
+
+    await backup.choose();
+    items = [];
+    await backup.save();
+
+    const status = backup.status;
+    expect(status.kind).toBe('held');
+    expect(status.kind === 'held' && status.lastWrite).toBe(1000);
+  });
+
+  it('is a state somebody has to answer, not a quiet skip', async () => {
+    const folder = new FakeFolder();
+    let items: string[] = ['eins'];
+    const backup = make(folder, { produce: async () => ({ items }), looksEmpty: nothing });
+
+    await backup.choose();
+    items = [];
+    await backup.save();
+
+    // A backup that silently stops is worse than none. Holding is only safe
+    // because the panel is made to shout about it.
+    expect(needsAttention(backup.status)).toBe(true);
+    expect(actionsFor(backup, backup.status).map((a) => a.id)).toEqual(['save-empty', 'forget']);
+  });
+
+  it('writes the emptiness once confirmed, and asks again the next time', async () => {
+    const folder = new FakeFolder();
+    let items: string[] = ['eins'];
+    const backup = make(folder, { produce: async () => ({ items }), looksEmpty: nothing });
+
+    await backup.choose();
+    items = [];
+    await backup.save();
+    expect(backup.status.kind).toBe('held');
+
+    await backup.confirmEmpty();
+    expect(backup.status.kind).toBe('idle');
+    expect(JSON.parse(folder.files.get('testprodukt-aktuell.json')!).items).toHaveLength(0);
+
+    // Emptiness on top of emptiness is not a loss, so it goes through.
+    await backup.save();
+    expect(backup.status.kind).toBe('idle');
+
+    // But a NEW library, emptied again later, is asked about again: the
+    // permission was for one write and was consumed by it.
+    items = ['drei'];
+    await backup.save();
+    items = [];
+    await backup.save();
+    expect(backup.status.kind).toBe('held');
+  });
+
+  it('does not hold when there is nothing to lose yet', async () => {
+    const folder = new FakeFolder();
+    const backup = make(folder, { produce: async () => ({ items: [] }), looksEmpty: nothing });
+
+    // First ever write of an empty product. There is no copy to protect, and
+    // refusing here would mean a new user never gets a backup at all.
+    await backup.choose();
+    expect(backup.status.kind).toBe('idle');
+    expect(folder.files.has('testprodukt-aktuell.json')).toBe(true);
+  });
+
+  it('does nothing at all without the predicate', async () => {
+    const folder = new FakeFolder();
+    let items: string[] = ['eins'];
+    const backup = make(folder, { produce: async () => ({ items }) });
+
+    await backup.choose();
+    items = [];
+    await backup.save();
+
+    // No looksEmpty means no guard, and that is the honest default rather than
+    // this module guessing at what a product's emptiness looks like.
+    expect(backup.status.kind).toBe('idle');
+    expect(JSON.parse(folder.files.get('testprodukt-aktuell.json')!).items).toHaveLength(0);
   });
 });

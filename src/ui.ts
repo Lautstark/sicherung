@@ -54,7 +54,7 @@ import type { Status } from './types.js';
  * index.ts is held by a test asserting the prototype surface; this is the
  * same idea one layer out, enforced by the compiler.
  */
-export type Actor = Pick<Sicherung, 'choose' | 'confirm' | 'save' | 'forget'>;
+export type Actor = Pick<Sicherung, 'choose' | 'confirm' | 'confirmEmpty' | 'save' | 'forget'>;
 
 /**
  * Something to offer the user, given where the backup currently stands.
@@ -63,7 +63,7 @@ export type Actor = Pick<Sicherung, 'choose' | 'confirm' | 'save' | 'forget'>;
  * through `t()` or as a literal, in whatever language it has.
  */
 export interface Action {
-  id: 'choose' | 'confirm' | 'retry' | 'forget';
+  id: 'choose' | 'confirm' | 'save-empty' | 'retry' | 'forget';
   /**
    * The one that leads, drawn as the primary button. At most one per status,
    * and `forget` is never it: leaving is not what the panel is encouraging.
@@ -97,6 +97,13 @@ export function actionsFor(backup: Actor, status: Status): Action[] {
       return [{ id: 'retry', primary: true, run: () => backup.save() }, forget];
     case 'idle':
       return [forget];
+    // The primary is the one that overwrites, because the other answer is not
+    // a button: somebody who did not mean to empty their library fixes the
+    // cause and the next save goes through by itself. `forget` is beside it so
+    // that a person who has realised the folder belongs to something else can
+    // put it down rather than being cornered into saving over it.
+    case 'held':
+      return [{ id: 'save-empty', primary: true, run: () => backup.confirmEmpty() }, forget];
     case 'saving':
     case 'unsupported':
       return [];
@@ -129,7 +136,7 @@ export function actionsFor(backup: Actor, status: Status): Action[] {
  * cover.
  */
 export const needsAttention = (status: Status): boolean =>
-  status.kind === 'needs-permission' || status.kind === 'failed';
+  status.kind === 'needs-permission' || status.kind === 'failed' || status.kind === 'held';
 
 /**
  * The boundaries at which "how long ago" changes unit, and the divisor for
