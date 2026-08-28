@@ -1,0 +1,22 @@
+// Renovate, for this repository.
+//
+// One line, because there is nothing here to except. Everything general - when
+// updates arrive, what groups with what, what may merge itself - lives in
+// Lautstark/.github and names no package.
+//
+// This package depends on idb and on nothing pinned by tag, so the two
+// exceptions the family carries elsewhere - the github:-pinned @lautstark/*
+// packages, and onnxruntime-web - have no dependency here to apply to. It is
+// itself one of the packages the three apps pin that way, which is the reason
+// it is worth having this file at all: what it ships is the standing backup,
+// and a dependency of it moving unattended is worth the same Monday morning
+// look as anything else in the family.
+//
+// The .json5 is spelled out on purpose: the //path/to/file syntax implies a
+// .json extension, so omitting it looks for a file that is not there and
+// Renovate stops before it does anything. The shorter "owner/repo:name" form
+// implies it too.
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["github>Lautstark/.github//renovate-shared.json5"],
+}
