@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { actionsFor, ago, needsAttention, type Actor } from '../src/ui.js';
+import { actionsFor, ago, lineFor, needsAttention, type Actor } from '../src/ui.js';
 import type { Status } from '../src/types.js';
 
 /*
@@ -179,5 +179,65 @@ describe('needsAttention', () => {
       expect(needsAttention(status)).toBe(true);
       expect(actionsFor(backup, status).length).toBeGreaterThan(0);
     }
+  });
+});
+
+/*
+ * The line each state asks for.
+ *
+ * Same reason as the table above: three products held this switch, all three
+ * agreed on its shape, and nothing was checking that they still did. What is
+ * asserted here is the shape - which arms exist, which carry a folder or a
+ * reason, and which carry an age - because that is the half that was being
+ * kept in step by hand. The words stay the products'.
+ */
+describe('what the line says in each state', () => {
+  it('has nothing to say where there is no picker', () => {
+    expect(lineFor({ kind: 'unsupported' })).toEqual({ key: 'none' });
+  });
+
+  it('names no folder before one is chosen', () => {
+    expect(lineFor({ kind: 'off' })).toEqual({ key: 'off' });
+  });
+
+  /* Splits, because "never saved" is its own sentence rather than an age
+     phrase inside one - so no product has to render an empty age. */
+  it('splits idle on whether anything has ever been written', () => {
+    expect(lineFor({ kind: 'idle', folder: 'Sicherung', lastWrite: null }))
+      .toEqual({ key: 'idle-never', folder: 'Sicherung' });
+    expect(lineFor({ kind: 'idle', folder: 'Sicherung', lastWrite: 1000 }))
+      .toEqual({ key: 'idle', folder: 'Sicherung', lastWrite: 1000 });
+  });
+
+  /* These three keep the null instead, because there the age is a clause
+     inside the sentence and the product's wording decides how it reads. */
+  it('carries the age, null and all, for the three that report one', () => {
+    expect(lineFor({ kind: 'needs-permission', folder: 'S', lastWrite: null }))
+      .toEqual({ key: 'needs-permission', folder: 'S', lastWrite: null });
+    expect(lineFor({ kind: 'failed', folder: 'S', lastWrite: 7, reason: 'voll' }))
+      .toEqual({ key: 'failed', reason: 'voll', lastWrite: 7 });
+    expect(lineFor({ kind: 'held', folder: 'S', lastWrite: 7 }))
+      .toEqual({ key: 'held', folder: 'S', lastWrite: 7 });
+  });
+
+  /* failed reports the reason and not the folder: the sentence is about what
+     went wrong, and all three products wrote it that way. */
+  it('gives failed its reason rather than its folder', () => {
+    const line = lineFor({ kind: 'failed', folder: 'Sicherung', lastWrite: null, reason: 'voll' });
+    expect(line).not.toHaveProperty('folder');
+    expect(line).toMatchObject({ reason: 'voll' });
+  });
+
+  it('answers for every state a panel is ever drawn in', () => {
+    const every: Status[] = [
+      { kind: 'unsupported' },
+      { kind: 'off' },
+      { kind: 'saving', folder: 'S', lastWrite: null },
+      { kind: 'idle', folder: 'S', lastWrite: null },
+      { kind: 'needs-permission', folder: 'S', lastWrite: null },
+      { kind: 'failed', folder: 'S', lastWrite: null, reason: 'r' },
+      { kind: 'held', folder: 'S', lastWrite: null },
+    ];
+    for (const status of every) expect(lineFor(status).key).toBeTruthy();
   });
 });

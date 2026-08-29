@@ -174,3 +174,70 @@ export function ago(at: number, locale: string, now = Date.now()): string {
   return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
     .format(-Math.round(gap / per), unit);
 }
+
+/**
+ * What the panel's one line has to say, as a shape rather than as words.
+ *
+ * The three products each held a `sentence(status)` that turned a Status into
+ * prose, and all three were the same switch: the same seven arms, the same
+ * choice of which of them carry an age, and the same decision that `held` does
+ * not read like a failure. Only the words differed - and by 2026-08-28 they
+ * had started to differ in more than that, because nothing compared them.
+ *
+ * So this returns a description and never a word, which is `actionsFor`'s rule
+ * one file up and for the same reason: two of the three products are bilingual
+ * and the words are theirs. What is shared is the part that was drifting.
+ *
+ * The two ages are deliberately different shapes, because the sentences are:
+ *
+ * - `idle` splits into two keys. "never saved" is its own sentence rather than
+ *   an age phrase inside one, so a product renders two strings and neither has
+ *   to carry an empty age.
+ * - `needs-permission`, `failed` and `held` carry `lastWrite` including its
+ *   null, because there the age is a clause *inside* the sentence - "the last
+ *   copy is 3 minutes old", or the admission that there has never been one -
+ *   and the product's own wording decides how that clause reads.
+ *
+ * Getting that split wrong is what a fourth product would do, and it is
+ * exactly what the three copies were keeping in step by hand.
+ */
+export type Line =
+  /** Nothing to say: no picker in this browser, and no panel either. */
+  | { key: 'none' }
+  | { key: 'off' }
+  | { key: 'saving' }
+  | { key: 'idle'; folder: string; lastWrite: number }
+  | { key: 'idle-never'; folder: string }
+  | { key: 'needs-permission'; folder: string; lastWrite: number | null }
+  | { key: 'failed'; reason: string; lastWrite: number | null }
+  | { key: 'held'; folder: string; lastWrite: number | null };
+
+/**
+ * The line for a status.
+ *
+ * A product switches on `line.key` and supplies its own words. The switch is
+ * still a switch, and that is the point: the union comes from here, so a
+ * product that misses an arm or invents one fails to compile rather than
+ * quietly saying nothing in a state it forgot about.
+ */
+export function lineFor(status: Status): Line {
+  switch (status.kind) {
+    case 'unsupported': return { key: 'none' };
+    case 'off': return { key: 'off' };
+    case 'saving': return { key: 'saving' };
+    case 'idle':
+      return status.lastWrite === null
+        ? { key: 'idle-never', folder: status.folder }
+        : { key: 'idle', folder: status.folder, lastWrite: status.lastWrite };
+    case 'needs-permission':
+      return { key: 'needs-permission', folder: status.folder, lastWrite: status.lastWrite };
+    case 'failed':
+      return { key: 'failed', reason: status.reason, lastWrite: status.lastWrite };
+    // Not "something went wrong": nothing did. The copy in the folder is still
+    // whole, and the only question is whether this browser being empty is the
+    // truth. All three products had worked that out separately and all three
+    // had written the same note above this arm.
+    case 'held':
+      return { key: 'held', folder: status.folder, lastWrite: status.lastWrite };
+  }
+}
