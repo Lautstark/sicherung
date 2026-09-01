@@ -25,6 +25,14 @@
     "./ui": {
       "types": "./dist/ui.d.ts",
       "default": "./dist/ui.js"
+    },
+    "./ablage": {
+      "types": "./dist/ablage.d.ts",
+      "default": "./dist/ablage.js"
+    },
+    "./ablage-ui": {
+      "types": "./dist/ablage-ui.d.ts",
+      "default": "./dist/ablage-ui.js"
     }
   },
   "files": [

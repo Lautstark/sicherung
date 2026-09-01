@@ -1,6 +1,6 @@
 # ADR 0001 — A folder can be the store, and this package grows a reading half
 
-**Status:** proposed · **Date:** 2026-09-01 · **Applies to:**
+**Status:** accepted for the reading half, and built · **Date:** 2026-09-01 · **Applies to:**
 `@lautstark/sicherung` — `src/index.ts`, `src/store.ts`, `src/types.ts`,
 `package.json`'s `exports` — and `@lautstark/design`'s
 [`conventions.md`](https://github.com/Lautstark/design/blob/main/docs/conventions.md)
@@ -419,9 +419,9 @@ states a backup genuinely cannot be in.
   otherwise, which reads as *deliberately not set up* — the wrong sentence in
   both cases, and badly wrong for `conflicted`.
 
-- **`src/store.ts` goes to database version 2.** Only to add a key prefix; the
-  upgrade adds and touches nothing. The three products see nothing, and their
-  remembered folders are not disturbed.
+- **`src/store.ts` did not need a version at all.** The `folders` store is keyed by
+  an arbitrary string, so `ablage:<app>` sits beside `<app>` with no schema change
+  and no upgrade. This ADR was more cautious than the code required.
 
 - **The three consumers are unaffected until somebody moves a tag.** They pin
   `#v1.4.0`, they compile against `Line`, `Action['id']` and — bildhaft alone —
@@ -448,13 +448,14 @@ states a backup genuinely cannot be in.
 
 ## What is not settled
 
-**Whether the conflict-detection rule holds outside Dropbox.** The name-based
-rule assumes a sync client decorates the stem — `x (in Konflikt stehende Kopie
-…).json` — rather than replacing it. That has been reasoned about and not tested
-against iCloud Drive or Nextcloud, and a client that renames rather than
-decorates would leave a conflict silently undetected, which is the worst
-available failure for this feature. It should be tested against all three before
-this ADR is accepted rather than proposed.
+**Whether the conflict-detection rule holds outside Dropbox.** Still open, and it
+is why the rule sits behind two named regular expressions at the head of
+`src/ablage.ts` rather than being spread through it. It assumes a sync client
+decorates the stem — `x (in Konflikt stehende Kopie …).json` — rather than
+replacing it, which is tested here against a decorating client and against none
+of the others. A client that renames instead would leave a conflict silently
+undetected, which is the worst available failure for this feature. Test it
+against iCloud Drive and Nextcloud before a household relies on it.
 
 **Whether `FileSystemObserver` is usable.** `poll()` is specified as the
 contract precisely so this can be answered later without the answer mattering

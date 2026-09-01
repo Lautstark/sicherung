@@ -107,3 +107,54 @@ export interface Mark {
    */
   lastEmpty?: boolean;
 }
+
+/* --------------------------------------------------------------- Ablage --- */
+
+/* A folder that is the store rather than a copy of one. The vocabulary is
+   `Sicherung`'s wherever the word means the same thing, because @lautstark/design
+   styles the state dot by name and a shared word is a shared dot for free. Two
+   kinds are new, and they describe states a backup genuinely cannot be in. */
+export type AblageStatus =
+  | { kind: 'unsupported' }
+  | { kind: 'off' }
+  | { kind: 'needs-permission'; folder: string }
+  | { kind: 'idle'; folder: string }
+  | { kind: 'saving'; folder: string }
+  | { kind: 'failed'; folder: string; reason: string }
+  /** The folder is unreachable and the product is serving its mirror read-only. */
+  | { kind: 'stale'; folder: string; reason: string }
+  /** A sync client left two of something and a person has to say which. */
+  | { kind: 'conflicted'; folder: string; ids: string[] };
+
+export interface AblageOptions {
+  /** Namespaces the subtree in the chosen folder, and the remembered handle. */
+  app: string;
+  /** One folder per kind of record. A product declares what it keeps. */
+  kinds: readonly string[];
+  now?: () => number;
+}
+
+/* The two fields this package learns. `Sicherung` knows nothing at all about what
+   it writes; a filename has to come from somewhere, and a conflict cannot be
+   reported without something to report about the two sides. conventions.md §1.1
+   already makes identity a UUID and §1.4 already gives `updatedAt` a reader, so
+   this is a filename convention rather than a new obligation. */
+export interface Stored {
+  id: string;
+  updatedAt: number;
+  [field: string]: unknown;
+}
+export interface Listed {
+  id: string;
+  updatedAt: number;
+}
+export interface Change {
+  kind: string;
+  id: string;
+  what: 'appeared' | 'changed' | 'went';
+}
+export interface Conflict {
+  kind: string;
+  id: string;
+  candidates: { filename: string; updatedAt: number }[];
+}

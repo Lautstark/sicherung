@@ -86,3 +86,63 @@ export function pickerFor(folder: FakeFolder | null): () => Promise<unknown> {
     return folder;
   };
 }
+
+/* A folder with folders in it, and files you can read back.
+ *
+ * `FakeFolder` above is flat and write-only, which is exactly what `Sicherung`
+ * needs and exactly what `Ablage` cannot be tested against. Kept separate rather
+ * than grown, so the tests that pin the backup's behaviour keep the fake they
+ * were written for. */
+export class FakeTree {
+  readonly files = new Map<string, string>();
+  readonly dirs = new Map<string, FakeTree>();
+  failWrites: string | null = null;
+  #permission: PermissionState = 'granted';
+  #granting: PermissionState = 'granted';
+
+  constructor(readonly name = 'Haushalt') {}
+
+  decay(onRequest: PermissionState = 'granted'): void {
+    this.#permission = 'prompt';
+    this.#granting = onRequest;
+  }
+  async queryPermission(): Promise<PermissionState> { return this.#permission; }
+  async requestPermission(): Promise<PermissionState> {
+    this.#permission = this.#granting;
+    return this.#granting;
+  }
+
+  async getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<FakeTree> {
+    const there = this.dirs.get(name);
+    if (there) return there;
+    if (!options?.create) throw new Error(`no such directory: ${name}`);
+    const made = new FakeTree(name);
+    this.dirs.set(name, made);
+    return made;
+  }
+
+  async getFileHandle(name: string, options?: { create?: boolean }) {
+    if (!this.files.has(name) && !options?.create) throw new Error(`no such file: ${name}`);
+    return {
+      getFile: async () => ({ text: async () => this.files.get(name) ?? '' }),
+      createWritable: async () => new FakeWritable(
+        (text) => this.files.set(name, text),
+        this.failWrites ?? undefined,
+      ),
+    };
+  }
+
+  async *keys(): AsyncGenerator<string> {
+    for (const name of [...this.files.keys()]) yield name;
+  }
+  async removeEntry(name: string): Promise<void> { this.files.delete(name); }
+
+  /** What a sync client does when it cannot merge: a second file beside the first. */
+  conflictOn(path: string, name: string, text: string): void {
+    const [app, kind] = path.split('/');
+    this.dirs.get(app)?.dirs.get(kind)?.files.set(name, text);
+  }
+  at(path: string): FakeTree | undefined {
+    return path.split('/').reduce<FakeTree | undefined>((dir, part) => dir?.dirs.get(part), this);
+  }
+}
