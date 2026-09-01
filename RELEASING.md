@@ -24,8 +24,13 @@ be two different kinds of object.
 From a clean `main`:
 
 ```
-npm version minor
+npm version minor -m "chore(release): %s"
 ```
+
+The message template is not optional. `npm version`'s default subject is the
+bare number, and `.githooks/commit-msg` refuses it — the hook arrived after this
+document did, and for one release the two disagreed with each other rather than
+with the person following them.
 
 `preversion` runs typecheck, tests and the build first, so a broken tree cannot
 be tagged. Nothing has left your machine yet — check `git show --stat HEAD`,
