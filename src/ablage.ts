@@ -33,6 +33,7 @@ const CANONICAL = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 /* The mark that says this folder is a store. A plain name rather than a dotted
    one: sync clients treat dotfiles inconsistently, and this file has to travel. */
 const MARK = 'adopted.json';
+
 const ANY_ID = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
 
 export class Ablage {
@@ -96,9 +97,12 @@ export class Ablage {
     if (!Ablage.supported) return this.#announce({ kind: 'unsupported' });
     let folder: Dir;
     try {
+      /* `id` is what makes the dialog open where it last stood rather than at
+         some default. It is per origin, so it does nothing across products — but
+         within one it turns "find that folder again" into a glance. */
       folder = (await (globalThis as unknown as {
-        showDirectoryPicker(options: { mode: string }): Promise<Dir>;
-      }).showDirectoryPicker({ mode: 'readwrite' }));
+        showDirectoryPicker(options: { mode: string; id?: string }): Promise<Dir>;
+      }).showDirectoryPicker({ mode: 'readwrite', id: 'lautstark' }));
     } catch {
       // Somebody dismissing a picker has to cost nothing.
       return this.#status;
