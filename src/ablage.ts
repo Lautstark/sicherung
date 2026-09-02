@@ -17,7 +17,7 @@
 import { readFolder, writeFolder, forgetFolder } from './store.js';
 import type { AblageOptions, AblageStatus, Adoption, Conflict, Change, Listed, Stored, Written } from './types.js';
 
-export type { AblageOptions, AblageStatus, Conflict, Change, Listed, Stored };
+export type { AblageOptions, AblageStatus, Adoption, Conflict, Change, Listed, Stored, Written };
 
 /** A directory handle, narrowed to what is used here. */
 interface Dir extends FileSystemDirectoryHandle {
