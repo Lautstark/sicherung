@@ -73,12 +73,6 @@ export class FakeFolder {
   async *keys(): AsyncGenerator<string> {
     for (const name of [...this.files.keys()]) yield name;
   }
-  /** What a file manager shows: the directories as well as the files. */
-  async *values(): AsyncGenerator<{ kind: string; name: string }> {
-    for (const name of [...this.dirs.keys()]) yield { kind: 'directory', name };
-    for (const name of [...this.files.keys()]) yield { kind: 'file', name };
-  }
-
   async removeEntry(name: string): Promise<void> {
     this.files.delete(name);
   }
