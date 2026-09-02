@@ -488,6 +488,41 @@ count is unbounded by anything a household does by hand, the model is wrong
 before the store is. Wochenwerk now stores the rule and derives its days, and the
 same folder is nine files.
 
+## What the move settled
+
+All four products moved between 1 and 2 September 2026 — Wochenwerk, bildhaft,
+mitreden, vorlaut-editor — and two things that were left open above have answers
+now.
+
+**`sicherung` stays, and for a second reason.** The one above holds: a browser
+with no picker cannot have a store in a folder, and there the one-way backup is
+the only thing between a cleared profile and a child's vocabulary. What the move
+added is why it stays *where there is* a picker. It writes dated copies and
+refuses to overwrite with an empty library, and a store folder does neither — it
+holds the current state, and a mistake in it is everywhere within seconds. That
+is not a smaller version of the same promise; it is the other one. bildhaft has
+the receipt: when its origin moved on 2026-08-28 and the new address opened
+empty, the dated copy from five days earlier is what was left.
+
+Where a product has both, the copies go *in* the store folder rather than in a
+second one — `Sicherung.useFolder`, argued for at the allow-list. One folder,
+the live work in `<folder>/<app>/` and the dated copies flat above it.
+
+**What each product does not put in the folder is as decided as what it does.**
+Settings are the device's setup. mitreden's audio and vorlaut's speech are
+synthesised and their staleness is already decidable, so they are caches, and a
+cache is not a source of anything; vorlaut's marks say which board is open on
+*this* machine. The rule that emerged is worth stating plainly: **a folder holds
+what a household made, not what a device worked out.**
+
+**One file per record met two records that had no UUID**, and neither store was
+rewritten to suit it. bildhaft's dictionary is keyed by the word it is about and
+mitreden's sentences by a slug of their own text — the latter load-bearing,
+because it is a filename on somebody's talker. Both file under an id hashed from
+that key, with the key itself inside the record. The same word lands on the same
+file on every device without two devices that have never met agreeing on
+anything, and the store's own filename rule is untouched.
+
 ## What is not settled
 
 **Whether the conflict-detection rule holds outside Dropbox.** Still open, and it
