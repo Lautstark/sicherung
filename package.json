@@ -37,6 +37,10 @@
     "./ablage-panel": {
       "types": "./dist/ablage-panel.d.ts",
       "default": "./dist/ablage-panel.js"
+    },
+    "./backup-panel": {
+      "types": "./dist/backup-panel.d.ts",
+      "default": "./dist/backup-panel.js"
     }
   },
   "files": [

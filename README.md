@@ -147,6 +147,53 @@ formatter per call and **must never cache one**: a product that changes
 language without reloading would go on being answered in the language the
 reader has just left, and the string would stay well-formed the whole time.
 
+## Drawing the backup panel — `@lautstark/sicherung/backup-panel`
+
+`ui.ts` above stops at the states and the actions. That was the right place to
+stop for as long as one product drew the panel; it was not, once four had.
+
+```js
+import { backupPanel } from '@lautstark/sicherung/backup-panel';
+
+const panel = backupPanel({
+  backup,
+  say: notify,
+  lang: 'de',
+  headline: (text) => { dataPanel.state.textContent = text; },
+});
+if (panel) container.append(panel.node);
+// and when the container goes:
+panel?.dispose();
+```
+
+`null` where the browser has no picker — the ordinary download button beside it
+is the whole offer there, and a tablet must not be shown a backup story it
+cannot have.
+
+It carries the words, in German and English, and the markup. That is a
+departure from `/ui`'s rule and the same one `ablage-panel` already made, for
+the same reason: four products writing their own sentences is four chances to
+disagree, and by the time they were read side by side they had. What each copy
+had that the others did not:
+
+| | headline | `dispose` | English quotes |
+| --- | --- | --- | --- |
+| bildhaft, 211 lines | ✓ | ✓ | ✓ |
+| vorlaut-editor, 170 | — | — | n/a |
+| mitreden, 161 | — | — | German „ “ |
+| druckwerk, 112 | — | — | n/a |
+| wochenwerk | *no panel at all* | | |
+
+The headline is the line a panel's own summary carries, so „Daten" stops being
+the one section whose state you have to unfold it to learn — and it keeps *being
+written* apart from *looks like it is*, which is the distinction the whole
+module exists for. `dispose` is the subscription: three of the four never
+unsubscribed, so every reopen of a settings dialog left another listener
+painting a node nobody could see.
+
+What stays with the product is what only it knows: which `Sicherung` this is,
+where a spoken sentence goes, and which heading to put the state line in.
+
 ### What this module deliberately is not
 
 It returns no text and no DOM.
