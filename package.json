@@ -33,6 +33,10 @@
     "./ablage-ui": {
       "types": "./dist/ablage-ui.d.ts",
       "default": "./dist/ablage-ui.js"
+    },
+    "./ablage-panel": {
+      "types": "./dist/ablage-panel.d.ts",
+      "default": "./dist/ablage-panel.js"
     }
   },
   "files": [
@@ -54,6 +58,7 @@
   "devDependencies": {
     "@types/node": "^22.20.1",
     "fake-indexeddb": "^6.0.0",
+    "jsdom": "^30.0.1",
     "typescript": "^5.7.2",
     "vitest": "^3.0.0"
   },
