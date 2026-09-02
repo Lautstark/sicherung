@@ -1,6 +1,6 @@
 {
   "name": "@lautstark/sicherung",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "type": "module",
   "description": "Keeps a browser-held backup written to a folder the user picked, so a cleared cache is not the end of the work.",
   "license": "MIT",
