@@ -11,7 +11,7 @@ vi.mock('../src/store.js', () => ({
   forgetFolder: async (key: string) => { folders.delete(key); },
 }));
 
-const { Ablage } = await import('../src/ablage.js');
+const { Ablage, announceFolder, announcedFolder, stopAnnouncing } = await import('../src/ablage.js');
 
 const KINDS = ['termine', 'karten'] as const;
 const make = (tree: FakeTree | null) => {
@@ -394,5 +394,50 @@ describe('finding a folder beside the work', () => {
     await store.choose();
     await store.write('termine', record(A));
     expect(await store.folderHolding('METACOM_Symbole')).toBeNull();
+  });
+});
+
+/* Only ever switched on by somebody. The tests hold the shape of what travels,
+   because that is what was disclosed to the person who agreed to it. */
+describe('telling the other programmes which folder', () => {
+  /* The tests run without a document, so here is the smallest jar that behaves
+     like one: setting replaces the entry by name, reading gives them all back,
+     and max-age=0 removes. */
+  beforeEach(() => {
+    const jar = new Map<string, string>();
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {
+        get cookie() { return [...jar].map(([name, value]) => `${name}=${value}`).join('; '); },
+        set cookie(written: string) {
+          const [pair, ...rest] = written.split('; ');
+          const at = pair.indexOf('=');
+          const name = pair.slice(0, at);
+          if (rest.some(part => part === 'max-age=0')) jar.delete(name);
+          else jar.set(name, pair.slice(at + 1));
+        },
+      },
+    });
+  });
+
+  it('says nothing until somebody turns it on', () => {
+    expect(announcedFolder()).toBeNull();
+  });
+
+  it('carries the folder and the programme, and nothing else', () => {
+    announceFolder('wochenwerk', 'Lautstark');
+    expect(announcedFolder()).toEqual({ app: 'wochenwerk', folder: 'Lautstark' });
+    expect(document.cookie).not.toContain('=;');
+  });
+
+  it('survives a folder named with the separator in it', () => {
+    announceFolder('wochenwerk', 'Familie | Ablage');
+    expect(announcedFolder()?.folder).toBe('Familie | Ablage');
+  });
+
+  it('is taken back where it is switched off', () => {
+    announceFolder('wochenwerk', 'Lautstark');
+    stopAnnouncing();
+    expect(announcedFolder()).toBeNull();
   });
 });

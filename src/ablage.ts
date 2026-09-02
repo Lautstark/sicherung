@@ -34,6 +34,53 @@ const CANONICAL = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
    one: sync clients treat dotfiles inconsistently, and this file has to travel. */
 const MARK = 'adopted.json';
 
+/* Telling the other Lautstark programmes which folder this one uses.
+ *
+ * Each product is its own origin, so a folder handle cannot travel between them
+ * and nobody can be spared the file dialog — that is the browser's rule. What can
+ * be spared is the wondering *which* folder, and a domain cookie is the only
+ * thing that reaches across subdomains: shared storage in a hidden iframe stopped
+ * working when browsers began partitioning it.
+ *
+ * Nothing here is ever called by this package. It is called because somebody
+ * turned it on, which is what makes it lawful: §25 TDDDG allows storing on
+ * somebody's device without consent only where it is strictly necessary for the
+ * service they asked for, and a convenience hint is not. Consent is not a banner
+ * — it is informed, specific, freely given and revocable — and a switch beside
+ * the folder somebody just chose is all four, in the one place where the reader
+ * knows what it means.
+ *
+ * A cookie rides along on every request to the site, so what it carries is the
+ * folder's name and the product's, and nothing else. That is disclosed where the
+ * switch is, because a person cannot consent to what they were not told. */
+const SHARED = 'lautstark-ordner';
+const OURS = 'lautstark.tech';
+const forDomain = () => {
+  const host = globalThis.location?.hostname ?? '';
+  return host === OURS || host.endsWith(`.${OURS}`) ? `; domain=.${OURS}` : '';
+};
+
+export function announceFolder(app: string, folder: string): void {
+  if (typeof document === 'undefined') return;
+  const secure = globalThis.location?.protocol === 'https:' ? '; secure' : '';
+  const value = encodeURIComponent(`${app}|${folder}`);
+  document.cookie = `${SHARED}=${value}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax${secure}${forDomain()}`;
+}
+
+export function stopAnnouncing(): void {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${SHARED}=; path=/; max-age=0; samesite=lax${forDomain()}`;
+}
+
+export function announcedFolder(): { app: string; folder: string } | null {
+  if (typeof document === 'undefined') return null;
+  const found = document.cookie.split('; ').find(part => part.startsWith(`${SHARED}=`));
+  if (!found) return null;
+  const [app, ...rest] = decodeURIComponent(found.slice(SHARED.length + 1)).split('|');
+  const folder = rest.join('|');
+  return app && folder ? { app, folder } : null;
+}
+
 const ANY_ID = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
 
 export class Ablage {
