@@ -9,17 +9,20 @@
 
 export class FakeWritable {
   #buffer = '';
+  /** Bytes arrive whole, where a record arrives as text to be appended. */
+  #blob: unknown = null;
   #closed = false;
-  constructor(private readonly commit: (text: string) => void, private readonly fail?: string) {}
+  constructor(private readonly commit: (written: unknown) => void | Promise<void>, private readonly fail?: string) {}
 
-  async write(data: string): Promise<void> {
+  async write(data: unknown): Promise<void> {
     if (this.fail) throw new Error(this.fail);
-    this.#buffer += data;
+    if (typeof data === 'string') this.#buffer += data;
+    else this.#blob = data;
   }
 
   async close(): Promise<void> {
     this.#closed = true;
-    this.commit(this.#buffer);
+    await this.commit(this.#blob ?? this.#buffer);
   }
 
   async abort(): Promise<void> {
@@ -65,7 +68,8 @@ export class FakeFolder {
     return {
       createWritable: async () => {
         this.writes++;
-        return new FakeWritable((text) => this.files.set(name, text), this.failWrites ?? undefined);
+        return new FakeWritable((written) => { this.files.set(name, String(written)); },
+          this.failWrites ?? undefined);
       },
     };
   }
@@ -95,6 +99,8 @@ export function pickerFor(folder: FakeFolder | null): () => Promise<unknown> {
 export class FakeTree {
   readonly files = new Map<string, string>();
   readonly dirs = new Map<string, FakeTree>();
+  /** The type a file was written with, which is what its ending came from. */
+  readonly types = new Map<string, string>();
   failWrites: string | null = null;
   /** Counts attempts, so a test can prove a batch stopped rather than ran on. */
   writes = 0;
@@ -125,10 +131,20 @@ export class FakeTree {
   async getFileHandle(name: string, options?: { create?: boolean }) {
     if (!this.files.has(name) && !options?.create) throw new Error(`no such file: ${name}`);
     return {
-      getFile: async () => ({ text: async () => this.files.get(name) ?? '' }),
+      getFile: async () => ({
+        text: async () => this.files.get(name) ?? '',
+        type: this.types.get(name) ?? '',
+        size: (this.files.get(name) ?? '').length,
+      }),
       createWritable: async () => {
         this.writes++;
-        return new FakeWritable((text) => this.files.set(name, text), this.failWrites ?? undefined);
+        return new FakeWritable(async (written: unknown) => {
+          /* A Blob arrives here where a record would arrive as a string. */
+          if (typeof written === 'string') { this.files.set(name, written); return; }
+          const blob = written as Blob;
+          this.types.set(name, blob.type);
+          this.files.set(name, await blob.text());
+        }, this.failWrites ?? undefined);
       },
     };
   }

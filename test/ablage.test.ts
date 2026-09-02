@@ -441,3 +441,67 @@ describe('telling the other programmes which folder', () => {
     expect(announcedFolder()).toBeNull();
   });
 });
+
+/* Pictures and recordings: bytes a record points at but cannot hold. */
+describe('a file beside a record', () => {
+  const picture = (type = 'image/png') => new Blob(['not really a png'], { type });
+
+  it('lies beside the record under the same id, named after what it is', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('karten', record(A));
+    await store.writeFile('karten', A, picture());
+    const dir = tree.dirs.get('wochenwerk')!.dirs.get('karten') as FakeTree;
+    expect([...dir.files.keys()].sort()).toEqual([`${A}.json`, `${A}.png`]);
+  });
+
+  it('comes back without anything having written the name down', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.writeFile('karten', A, picture('image/jpeg'));
+    expect(await (await store.readFile('karten', A))?.text()).toBe('not really a png');
+  });
+
+  it('keeps `bin` for bytes it cannot name, rather than guessing', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.writeFile('karten', A, picture('application/x-thing'));
+    const dir = tree.dirs.get('wochenwerk')!.dirs.get('karten') as FakeTree;
+    expect([...dir.files.keys()]).toEqual([`${A}.bin`]);
+  });
+
+  it('replaces rather than leaves two, where the type changed', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.writeFile('karten', A, picture('image/png'));
+    await store.writeFile('karten', A, picture('image/webp'));
+    const dir = tree.dirs.get('wochenwerk')!.dirs.get('karten') as FakeTree;
+    expect([...dir.files.keys()]).toEqual([`${A}.webp`]);
+  });
+
+  it('goes when the record goes, so no picture is left that nothing points at', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('karten', record(A));
+    await store.writeFile('karten', A, picture());
+    await store.remove('karten', A);
+    const dir = tree.dirs.get('wochenwerk')!.dirs.get('karten') as FakeTree;
+    expect([...dir.files.keys()]).toEqual([]);
+  });
+
+  it('stays out of the records, so a listing is still about ids', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('karten', record(A));
+    await store.writeFile('karten', A, picture());
+    expect((await store.list('karten')).map(item => item.id)).toEqual([A]);
+    expect(await store.conflicts()).toEqual([]);
+    expect(await store.withFiles('karten')).toEqual([A]);
+  });
+});

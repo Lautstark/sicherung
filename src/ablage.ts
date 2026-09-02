@@ -32,6 +32,17 @@ interface Dir extends FileSystemDirectoryHandle {
 const CANONICAL = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.json$/i;
 /* The mark that says this folder is a store. A plain name rather than a dotted
    one: sync clients treat dotfiles inconsistently, and this file has to travel. */
+/* What a file is called after its id. A folder somebody opens should show
+   pictures and recordings, not a pile of `x.bin` — and the type is what a
+   product already knows about its own bytes. Anything unrecognised keeps `bin`,
+   which is honest rather than a guess. */
+const ENDINGS: Record<string, string> = {
+  'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif',
+  'image/svg+xml': 'svg', 'audio/wav': 'wav', 'audio/mpeg': 'mp3', 'audio/webm': 'webm',
+  'audio/ogg': 'ogg', 'video/mp4': 'mp4', 'application/pdf': 'pdf', 'text/plain': 'txt',
+};
+const endingFor = (type: string) => ENDINGS[type.toLowerCase().split(';')[0].trim()] ?? 'bin';
+
 const MARK = 'adopted.json';
 
 /* Telling the other Lautstark programmes which folder this one uses.
@@ -220,12 +231,22 @@ export class Ablage {
     }
   }
 
-  async #names(dir: Dir): Promise<string[]> {
+  async #names(dir: Dir, ending = '.json'): Promise<string[]> {
     const names: string[] = [];
     const keys = dir.keys?.bind(dir);
     if (!keys) return names;
-    for await (const name of keys()) if (name.endsWith('.json')) names.push(name);
+    for await (const name of keys()) if (name.endsWith(ending)) names.push(name);
     return names;
+  }
+
+  /* The name a record's file goes by, if it has one. Everything that is not the
+     record itself and carries its id is it — which is how a file can be found
+     again without the record having to remember what it was called. */
+  async #fileFor(dir: Dir, id: string): Promise<string | null> {
+    for (const name of await this.#names(dir, '')) {
+      if (name !== `${id}.json` && name.startsWith(`${id}.`)) return name;
+    }
+    return null;
   }
 
   async #text(dir: Dir, name: string): Promise<string | null> {
@@ -310,6 +331,10 @@ export class Ablage {
     if (!dir) return this.#gone('the folder could not be opened');
     try {
       await dir.removeEntry(`${id}.json`);
+      /* A record's file has no life of its own; leaving it behind would be a
+         picture nothing points at, filling a household's folder for years. */
+      const file = await this.#fileFor(dir, id);
+      if (file) await dir.removeEntry(file).catch(() => undefined);
       this.#seen.delete(`${kind}/${id}`);
       return this.#ok();
     } catch (error) {
@@ -468,6 +493,61 @@ export class Ablage {
       written++;
     }
     return { written, missed: [] };
+  }
+
+  /* A file that belongs to a record — a picture, a recording — kept beside it
+   * rather than inside it.
+   *
+   * A record is JSON, and JSON has no way to hold bytes: a Blob put through
+   * `JSON.stringify` becomes `{}`, silently, which is a picture lost with no
+   * error anywhere. Encoding it into the record instead would work and would
+   * make every listing carry a megabyte of base64 to answer a question about
+   * ids.
+   *
+   * So it lies beside the record under the same id, and keeps the extension its
+   * type implies — a folder somebody opens should show pictures, not `x.bin`.
+   * Nothing has to write the name down: whatever carries the id and is not the
+   * record is the file. Deleting the record deletes it too. */
+  async writeFile(kind: string, id: string, blob: Blob): Promise<AblageStatus> {
+    if (this.#status.kind === 'stale') return this.#status;
+    const dir = await this.#dir(kind, true);
+    if (!dir) return this.#gone('the folder could not be opened');
+    try {
+      const old = await this.#fileFor(dir, id);
+      const name = `${id}.${endingFor(blob.type)}`;
+      if (old && old !== name) await dir.removeEntry(old).catch(() => undefined);
+      const file = await dir.getFileHandle(name, { create: true });
+      const writable = await file.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return this.#ok();
+    } catch (error) {
+      return this.#gone((error as Error)?.message ?? 'the file could not be written');
+    }
+  }
+
+  async readFile(kind: string, id: string): Promise<Blob | null> {
+    const dir = await this.#dir(kind);
+    if (!dir) return null;
+    const name = await this.#fileFor(dir, id);
+    if (!name) return null;
+    try {
+      return await (await (await dir.getFileHandle(name)).getFile());
+    } catch {
+      return null;
+    }
+  }
+
+  /** Which records in a kind have a file beside them. */
+  async withFiles(kind: string): Promise<string[]> {
+    const dir = await this.#dir(kind);
+    if (!dir) return [];
+    const found = new Set<string>();
+    for (const name of await this.#names(dir, '')) {
+      const dot = name.lastIndexOf('.');
+      if (dot > 0 && !name.endsWith('.json')) found.add(name.slice(0, dot));
+    }
+    return [...found].sort();
   }
 
   async poll(): Promise<Change[]> {
