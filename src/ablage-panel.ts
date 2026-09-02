@@ -193,10 +193,12 @@ export function wherePanel(options: PanelOptions): Panel {
         make('pre', 'tree', `${home}\n├── ${siblings[0]}/\n└── ${siblings[1]}/`),
       );
       add(state(say.browser, say.browserNote, false));
+      /* Two sentences in one paragraph rather than two stacked lines: the panel
+         had grown a column of short muted paragraphs, which reads as a wall
+         however short each one is. */
       add(
-        make('p', 'small muted', say.offer),
+        make('p', 'small muted', `${say.offer} ${say.noneYet}`),
         make('p', 'small muted', other ? say.elsewhere(other.app, other.folder) : say.same),
-        make('p', 'small muted', say.noneYet),
         acts(button(say.pick, '', () => void choose())),
       );
     } else {
