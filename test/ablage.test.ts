@@ -294,3 +294,38 @@ describe('a batch of writes', () => {
     expect(dir.writes - before).toBe(1);
   });
 });
+
+/* Somebody who has not made a folder yet cannot pick one, because a picker only
+   offers what exists. They pick where it should live instead. */
+describe('making the folder they did not make', () => {
+  it('says what is in the chosen folder, so a product can tell a fresh one from a Lautstark one', async () => {
+    const tree = new FakeTree('Dropbox');
+    const store = make(tree);
+    await store.choose();
+    expect(await store.folders()).toEqual([]);
+    await store.write('termine', record(A));
+    expect(await store.folders()).toEqual(['wochenwerk']);
+  });
+
+  it('steps into a folder it makes, and keeps that one', async () => {
+    const tree = new FakeTree('Dropbox');
+    const store = make(tree);
+    await store.choose();
+    expect(await store.nest('Lautstark')).toEqual({ kind: 'idle', folder: 'Lautstark' });
+    await store.write('termine', record(A));
+    /* Under Lautstark, not scattered through the Dropbox root. */
+    expect([...tree.dirs.keys()]).toEqual(['Lautstark']);
+    expect([...(tree.dirs.get('Lautstark') as FakeTree).dirs.keys()]).toEqual(['wochenwerk']);
+  });
+
+  it('comes back to the folder it made, not to the one above it', async () => {
+    const tree = new FakeTree('Dropbox');
+    const first = make(tree);
+    await first.choose();
+    await first.nest('Lautstark');
+    await first.write('termine', record(A));
+    const later = make(tree);
+    expect(await later.restore()).toEqual({ kind: 'idle', folder: 'Lautstark' });
+    expect((await later.list('termine')).map(item => item.id)).toEqual([A]);
+  });
+});

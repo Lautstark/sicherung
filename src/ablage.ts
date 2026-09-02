@@ -279,6 +279,46 @@ export class Ablage {
   /* ------------------------------------------------------------ noticing --- */
 
   /** What changed since the last look. The product drives the rhythm. */
+  /* What a file manager would show at the top of the chosen folder.
+   *
+   * Products use it for two things and the package should stay ignorant of both:
+   * deciding whether somebody has picked a folder that is already a Lautstark
+   * one, and telling somebody what is actually in the folder when what they were
+   * looking for is not. The second is the more valuable — "I put it there" and
+   * "the app sees these three names" together turn a mystery into a comparison. */
+  async folders(): Promise<string[]> {
+    if (!this.#folder) return [];
+    const entries = (this.#folder as unknown as { values?: () => AsyncIterable<{ kind: string; name: string }> }).values;
+    if (!entries) return [];
+    const found: string[] = [];
+    try {
+      for await (const entry of entries.call(this.#folder)) if (entry.kind === 'directory') found.push(entry.name);
+    } catch {
+      return [];
+    }
+    return found.sort();
+  }
+
+  /* Step into a directory inside the chosen one and keep that instead.
+   *
+   * The picker can only offer folders that exist, so somebody who has not made
+   * one yet has to leave the browser, make it, and come back. This is the way
+   * out: they pick where it should live, and the folder is made there. It is
+   * also the difference between a tidy `Lautstark/` and a Dropbox root with
+   * `wochenwerk/` and `bildhaft/` scattered through it — which is why the
+   * product asks first, and why the package does not decide this by itself. */
+  async nest(name: string): Promise<AblageStatus> {
+    if (!this.#folder) return this.#status;
+    try {
+      const inside = (await this.#folder.getDirectoryHandle(name, { create: true })) as Dir;
+      this.#folder = inside;
+      await writeFolder(this.#key, inside);
+      return this.#announce({ kind: 'idle', folder: inside.name });
+    } catch (error) {
+      return this.#gone((error as Error)?.message ?? 'the folder could not be made');
+    }
+  }
+
   /* Whether this folder is already the store for this app.
    *
    * An empty store is a legitimate store — a household that adopted a folder and
