@@ -287,12 +287,47 @@ export class Ablage {
    * looking for is not. The second is the more valuable — "I put it there" and
    * "the app sees these three names" together turn a mystery into a comparison. */
   async folders(): Promise<string[]> {
-    if (!this.#folder) return [];
-    const entries = (this.#folder as unknown as { values?: () => AsyncIterable<{ kind: string; name: string }> }).values;
+    return this.#folder ? this.#subfolders(this.#folder) : [];
+  }
+
+  /* A directory inside the chosen folder that holds a child by this name.
+   *
+   * This is the one thing here that hands out a handle rather than records, and
+   * it is worth being clear about why. A product that keeps its work in a folder
+   * often has something else that wants a folder too — a picture source with its
+   * own licensed set. Making somebody pick that a second time, on every device,
+   * is the step where setting up is abandoned; letting them drop it beside the
+   * work and finding it is the whole difference. No capability is gained: the
+   * product could have picked this folder itself, and it is the product that
+   * picked the one above it.
+   *
+   * Deliberately generous. Somebody who renames the folder, nests it a level too
+   * deep, or drops the inner folder in directly should still be finished, so the
+   * search goes by what is inside, two levels down, in any spelling. Being strict
+   * here would only be convenience for us. */
+  async folderHolding(child: string, depth = 2): Promise<{ name: string; handle: FileSystemDirectoryHandle } | null> {
+    if (!this.#folder) return null;
+    const wanted = child.toLowerCase();
+    let level: Dir[] = [this.#folder];
+    for (let step = 0; step <= depth && level.length; step++) {
+      const next: Dir[] = [];
+      for (const dir of level) {
+        for (const name of await this.#subfolders(dir)) {
+          if (name.toLowerCase() === wanted) return { name: dir.name, handle: dir };
+          try { next.push((await dir.getDirectoryHandle(name)) as Dir); } catch { /* unreadable, skip */ }
+        }
+      }
+      level = next;
+    }
+    return null;
+  }
+
+  async #subfolders(dir: Dir): Promise<string[]> {
+    const entries = (dir as unknown as { values?: () => AsyncIterable<{ kind: string; name: string }> }).values;
     if (!entries) return [];
     const found: string[] = [];
     try {
-      for await (const entry of entries.call(this.#folder)) if (entry.kind === 'directory') found.push(entry.name);
+      for await (const entry of entries.call(dir)) if (entry.kind === 'directory') found.push(entry.name);
     } catch {
       return [];
     }

@@ -329,3 +329,70 @@ describe('making the folder they did not make', () => {
     expect((await later.list('termine')).map(item => item.id)).toEqual([A]);
   });
 });
+
+/* Finding a folder somebody dropped beside their work, so they do not have to
+   pick it again on every device. Generosity is the point: strictness here would
+   only be convenience for us. */
+describe('finding a folder beside the work', () => {
+  const withMetacom = (where: FakeTree) => {
+    const set = where.dirs.get('METACOM_9_Desktop') ?? new FakeTree('METACOM_9_Desktop');
+    where.dirs.set('METACOM_9_Desktop', set);
+    set.dirs.set('METACOM_Symbole', new FakeTree('METACOM_Symbole'));
+    return set;
+  };
+
+  it('finds the folder that holds it, which is the one a picture source wants', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    withMetacom(tree);
+    const found = await store.folderHolding('METACOM_Symbole');
+    expect(found?.name).toBe('METACOM_9_Desktop');
+  });
+
+  it('does not care what the folder above it is called', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    const odd = new FakeTree('symbole von der DVD');
+    odd.dirs.set('METACOM_Symbole', new FakeTree('METACOM_Symbole'));
+    tree.dirs.set('symbole von der DVD', odd);
+    expect((await store.folderHolding('METACOM_Symbole'))?.name).toBe('symbole von der DVD');
+  });
+
+  it('reaches a level deeper, for somebody who dropped the whole download in', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    const outer = new FakeTree('Downloads');
+    tree.dirs.set('Downloads', outer);
+    withMetacom(outer);
+    expect((await store.folderHolding('METACOM_Symbole'))?.name).toBe('METACOM_9_Desktop');
+  });
+
+  it('takes the chosen folder itself where the inner one was dropped in directly', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    tree.dirs.set('METACOM_Symbole', new FakeTree('METACOM_Symbole'));
+    expect((await store.folderHolding('METACOM_Symbole'))?.name).toBe('Haushalt');
+  });
+
+  it('reads any spelling, because nobody types a folder name to match ours', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    const set = new FakeTree('metacom');
+    set.dirs.set('metacom_symbole', new FakeTree('metacom_symbole'));
+    tree.dirs.set('metacom', set);
+    expect((await store.folderHolding('METACOM_Symbole'))?.name).toBe('metacom');
+  });
+
+  it('says nothing rather than guessing where there is nothing to find', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('termine', record(A));
+    expect(await store.folderHolding('METACOM_Symbole')).toBeNull();
+  });
+});
