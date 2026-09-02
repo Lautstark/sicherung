@@ -190,7 +190,10 @@ export function wherePanel(options: PanelOptions): Panel {
       const other = announcedFolder();
       add(
         make('p', 'small', say.intro),
-        make('pre', 'tree', `${home}\n├── ${siblings[0]}/\n└── ${siblings[1]}/`),
+        /* This programme's own compartment first: a picture of somebody else's
+           two folders explains the idea and not their situation. */
+        make('pre', 'tree', `${home}\n├── ${options.store.app}/\n└── ${
+          siblings.find((name) => name !== options.store.app) ?? 'wochenwerk'}/`),
       );
       add(state(say.browser, say.browserNote, false));
       /* Two sentences in one paragraph rather than two stacked lines: the panel

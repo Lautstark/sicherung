@@ -44,7 +44,11 @@ describe('the panel with no folder', () => {
 
   it('draws the folder before the decision, so one picture does the explaining', () => {
     const { node } = panelFor(make(new FakeTree()));
-    expect(node.querySelector('.tree')?.textContent).toContain('Lautstark');
+    const tree = node.querySelector('.tree')?.textContent ?? '';
+    expect(tree).toContain('Lautstark');
+    /* This programme's own compartment first: a picture of somebody else's two
+       folders explains the idea and not their situation. */
+    expect(tree.split('\n')[1]).toContain('wochenwerk/');
   });
 
   it('offers rather than urges', () => {

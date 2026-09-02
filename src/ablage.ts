@@ -430,6 +430,11 @@ export class Ablage {
     }
   }
 
+  /** Which programme this is, for a panel that has to draw its compartment. */
+  get app(): string {
+    return this.#options.app;
+  }
+
   /* The folder somebody chose, for a product that has something else to put in
      it — its own snapshots, say.
 
