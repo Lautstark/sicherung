@@ -505,3 +505,21 @@ describe('a file beside a record', () => {
     expect(await store.withFiles('karten')).toEqual([A]);
   });
 });
+
+describe('handing the folder to something else', () => {
+  it('gives out the folder somebody chose, and nothing before they chose one', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    expect(store.handle()).toBeNull();
+    await store.choose();
+    expect(store.handle()).toBe(tree);
+  });
+
+  it('gives out the one it made, not the one above it', async () => {
+    const tree = new FakeTree('Dropbox');
+    const store = make(tree);
+    await store.choose();
+    await store.nest('Lautstark');
+    expect(store.handle()).toBe(tree.dirs.get('Lautstark'));
+  });
+});

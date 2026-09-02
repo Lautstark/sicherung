@@ -430,6 +430,17 @@ export class Ablage {
     }
   }
 
+  /* The folder somebody chose, for a product that has something else to put in
+     it — its own snapshots, say.
+
+     The only handle this class gives out apart from `folderHolding`, and worth
+     the same sentence: no capability is gained by it. The product picked this
+     folder, and could pick it again in one call; what it is spared is asking a
+     household to pick the same folder twice under two names that look alike. */
+  handle(): FileSystemDirectoryHandle | null {
+    return this.#folder ?? null;
+  }
+
   /* Whether this folder is already the store for this app.
    *
    * An empty store is a legitimate store — a household that adopted a folder and

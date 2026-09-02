@@ -180,6 +180,28 @@ export class Sicherung {
     return this.#status;
   }
 
+  /*
+   * Adopts a folder the product already holds, instead of asking for one.
+   *
+   * A household that keeps its work in a folder should not have to pick a second
+   * one for the copies. The snapshots go beside the work — the store fills
+   * `<folder>/<app>/` and these are flat files above it, so the two do not meet —
+   * and there is one folder to choose instead of two that look alike.
+   *
+   * It writes and never reads, which is what keeps the allow-list beside this
+   * class honest: the capability granted is the one `choose` grants, arriving by
+   * a different door. No new door into somebody's disk is opened by it, because
+   * the product handing the folder over is the product that picked it.
+   */
+  async useFolder(folder: FileSystemDirectoryHandle): Promise<Status> {
+    this.#folder = folder;
+    await writeFolder(this.#app, folder);
+    const { lastWrite } = await readMark(this.#app);
+    this.#announce({ kind: 'idle', folder: folder.name, lastWrite });
+    await this.save();
+    return this.#status;
+  }
+
   /** Re-asks for a remembered folder. Must be called from a user gesture. */
   async confirm(): Promise<Status> {
     if (!this.#folder) return this.restore();

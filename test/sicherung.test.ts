@@ -267,8 +267,17 @@ describe('the inlet', () => {
       // is worth its keep: it widened the surface, the test refused the change,
       // and somebody had to come here and say why. It writes and never reads —
       // it permits one save that was held back, and takes no argument at all.
+      //
+      // `useFolder` was argued for on 2026-09-02, and refused here first. Once a
+      // household keeps its work in a folder, being asked to pick a second one
+      // for the copies is two pickers that look alike; this takes the folder the
+      // product already holds. It writes and never reads: the capability is the
+      // one `choose` grants, arriving by a different door, and the product
+      // handing the folder over is the product that picked it. What the guarantee
+      // forbids is this class *reading* what a product keeps, and a directory
+      // handle passed in does not read anything by existing.
       'choose', 'confirm', 'confirmEmpty', 'forget', 'restore', 'save', 'schedule',
-      'status', 'subscribe',
+      'status', 'subscribe', 'useFolder',
     ]);
   });
 
