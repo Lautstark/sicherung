@@ -228,3 +228,69 @@ describe('forgetting', () => {
     expect(folders.size).toBe(0);
   });
 });
+
+/* The two lessons of the first real migration, both written down as the day they
+   were learned: a folder that is halfway through becoming a store must never be
+   read back, and a batch of writes must say when it stopped. */
+describe('becoming the store', () => {
+  it('is not a store until it is marked, however much is in it', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('termine', record(A));
+    expect(await store.adopted()).toBe(false);
+    expect(await store.adopt({ termine: [record(A)], karten: [] })).toEqual({ adopted: true, written: 1 });
+    expect(await store.adopted()).toBe(true);
+  });
+
+  it('leaves the folder unmarked where not everything landed', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    /* The write of the second record is where the folder goes out of reach. */
+    await store.write('termine', record(A));
+    (tree.dirs.get('wochenwerk')!.dirs.get('termine') as FakeTree).failWrites = 'the disk went away';
+    const went = await store.adopt({ termine: [record(A), record(B)] });
+    expect(went.adopted).toBe(false);
+    expect(went.reason).toBe('incomplete');
+    expect(await store.adopted()).toBe(false);
+  });
+
+  it('refuses a folder that is already a store, rather than pushing over it', async () => {
+    const tree = new FakeTree();
+    const first = make(tree);
+    await first.choose();
+    await first.adopt({ termine: [record(A)] });
+    /* A second machine connecting the same shared folder. */
+    const second = make(tree);
+    await second.choose();
+    expect(await second.adopt({ termine: [record(B)] })).toEqual({ adopted: false, reason: 'already', written: 0 });
+    expect((await second.list('termine')).map(item => item.id)).toEqual([A]);
+  });
+});
+
+describe('a batch of writes', () => {
+  it('says how many landed and hands back what did not', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('termine', record(A));
+    (tree.dirs.get('wochenwerk')!.dirs.get('termine') as FakeTree).failWrites = 'gone';
+    const done = await store.writeAll('termine', [record(A), record(B), record('33333333-3333-4333-8333-333333333333')]);
+    expect(done.written).toBe(0);
+    expect(done.missed).toHaveLength(3);
+  });
+
+  it('stops at the first failure rather than running silently to the end', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('termine', record(A));
+    const dir = tree.dirs.get('wochenwerk')!.dirs.get('termine') as FakeTree;
+    const before = dir.writes;
+    dir.failWrites = 'gone';
+    await store.writeAll('termine', Array.from({ length: 50 }, (_, index) =>
+      record(`${index}`.padStart(8, '0') + '-0000-4000-8000-000000000000')));
+    expect(dir.writes - before).toBe(1);
+  });
+});

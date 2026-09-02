@@ -15,7 +15,7 @@
  */
 
 import { readFolder, writeFolder, forgetFolder } from './store.js';
-import type { AblageOptions, AblageStatus, Conflict, Change, Listed, Stored } from './types.js';
+import type { AblageOptions, AblageStatus, Adoption, Conflict, Change, Listed, Stored, Written } from './types.js';
 
 export type { AblageOptions, AblageStatus, Conflict, Change, Listed, Stored };
 
@@ -30,6 +30,9 @@ interface Dir extends FileSystemDirectoryHandle {
    This rule is reasoned about and has been tested against one client; see the
    open question in adr/0001 before trusting it against the others. */
 const CANONICAL = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.json$/i;
+/* The mark that says this folder is a store. A plain name rather than a dotted
+   one: sync clients treat dotfiles inconsistently, and this file has to travel. */
+const MARK = 'adopted.json';
 const ANY_ID = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
 
 export class Ablage {
@@ -144,6 +147,17 @@ export class Ablage {
   /* ------------------------------------------------------------- reading --- */
 
   /** The folder for one kind of record, made if it is not there yet. */
+  /* The app's own directory, above its kinds. Only the mark lives here — a
+     product's records always live in a kind. */
+  async #app(create = false): Promise<Dir | null> {
+    if (!this.#folder) return null;
+    try {
+      return (await this.#folder.getDirectoryHandle(this.#options.app, { create })) as Dir;
+    } catch {
+      return null;
+    }
+  }
+
   async #dir(kind: string, create = false): Promise<Dir | null> {
     if (!this.#folder) return null;
     if (!this.#options.kinds.includes(kind)) throw new Error(`unknown kind: ${kind}`);
@@ -265,6 +279,71 @@ export class Ablage {
   /* ------------------------------------------------------------ noticing --- */
 
   /** What changed since the last look. The product drives the rhythm. */
+  /* Whether this folder is already the store for this app.
+   *
+   * An empty store is a legitimate store — a household that adopted a folder and
+   * then cleared it — so "has records in it" cannot answer this. A folder that is
+   * not yet a store, and one that is halfway through becoming one, are the same
+   * thing to a reader, and reading either back over a full local copy is how a
+   * week gets deleted. It happened. The mark is what tells them apart. */
+  async adopted(): Promise<boolean> {
+    const app = await this.#app();
+    return !!app && (await this.#text(app, MARK)) !== null;
+  }
+
+  /* Make this folder the store, from what the product hands over.
+   *
+   * Everything is written, then checked to be there, and only then is the mark
+   * written — in that order, because a folder that looks like a store and holds a
+   * fraction of one is worse than one that never claimed to be. A folder that is
+   * already a store is refused rather than overwritten: connecting a shared folder
+   * from a second machine must not push that machine's copy over everybody's. */
+  async adopt(everything: Record<string, Stored[]>): Promise<Adoption> {
+    if (await this.adopted()) return { adopted: false, reason: 'already', written: 0 };
+    let written = 0;
+    for (const [kind, records] of Object.entries(everything)) {
+      const done = await this.writeAll(kind, records);
+      written += done.written;
+      if (done.missed.length) return { adopted: false, reason: 'incomplete', written };
+    }
+    for (const [kind, records] of Object.entries(everything)) {
+      const there = new Set((await this.list(kind)).map(item => item.id));
+      if (records.some(record => !there.has(record.id))) return { adopted: false, reason: 'incomplete', written };
+    }
+    const app = await this.#app(true);
+    if (!app) { this.#gone('the folder could not be opened'); return { adopted: false, reason: 'unreachable', written }; }
+    try {
+      const file = await app.getFileHandle(MARK, { create: true });
+      const writable = await file.createWritable();
+      await writable.write(JSON.stringify({ app: this.#options.app, at: Date.now() }, null, 2));
+      await writable.close();
+    } catch (error) {
+      this.#gone((error as Error)?.message ?? 'the mark could not be written');
+      return { adopted: false, reason: 'unreachable', written };
+    }
+    this.#ok();
+    return { adopted: true, written };
+  }
+
+  /* Write many, and stop at the first that does not land.
+   *
+   * `write` answers with a status and never throws, which is right for one record
+   * and a trap for a batch: once the folder is out of reach every later call
+   * returns immediately having done nothing, so a loop over three thousand records
+   * finishes quickly, silently, and with a folder holding a fraction of them. That
+   * is not hypothetical — it is how a household lost its calendar. Stopping is the
+   * point: what follows a failure would fail too, and reporting what did not land
+   * is the only thing that lets a caller refuse to treat the folder as complete. */
+  async writeAll(kind: string, records: Stored[]): Promise<Written> {
+    let written = 0;
+    for (let index = 0; index < records.length; index++) {
+      const status = await this.write(kind, records[index]);
+      if (status.kind === 'stale' || status.kind === 'failed') return { written, missed: records.slice(index) };
+      written++;
+    }
+    return { written, missed: [] };
+  }
+
   async poll(): Promise<Change[]> {
     const changes: Change[] = [];
     const now = new Map<string, number>();

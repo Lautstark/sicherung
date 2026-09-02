@@ -97,6 +97,8 @@ export class FakeTree {
   readonly files = new Map<string, string>();
   readonly dirs = new Map<string, FakeTree>();
   failWrites: string | null = null;
+  /** Counts attempts, so a test can prove a batch stopped rather than ran on. */
+  writes = 0;
   #permission: PermissionState = 'granted';
   #granting: PermissionState = 'granted';
 
@@ -125,10 +127,10 @@ export class FakeTree {
     if (!this.files.has(name) && !options?.create) throw new Error(`no such file: ${name}`);
     return {
       getFile: async () => ({ text: async () => this.files.get(name) ?? '' }),
-      createWritable: async () => new FakeWritable(
-        (text) => this.files.set(name, text),
-        this.failWrites ?? undefined,
-      ),
+      createWritable: async () => {
+        this.writes++;
+        return new FakeWritable((text) => this.files.set(name, text), this.failWrites ?? undefined);
+      },
     };
   }
 

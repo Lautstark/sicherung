@@ -446,6 +446,48 @@ states a backup genuinely cannot be in.
 - **Wochenwerk can be built against this.** It gets its four things, on a
   subpath, from a package that is not going to be deleted underneath it.
 
+## What the first migration taught
+
+Wochenwerk moved onto this in September 2026 and lost a household's calendar
+doing it. All three findings below come from that day, and the first two are now
+in the package because leaving them out means every product rediscovers them the
+same way.
+
+**A folder that is halfway through becoming a store reads exactly like a folder
+that lost everything.** Wochenwerk treated the folder as the truth from the
+moment it was picked rather than from the moment it held a complete copy. Its
+own watcher then polled, saw files it had no memory of — its own, written
+seconds earlier — called that a change from elsewhere, and replaced the browser's
+copy with the fraction of the folder that had been written. No reload was needed
+and nothing reported an error. `adopted()` and `adopt()` exist so that "is this a
+store?" is a question with an answer: everything is written, then checked to be
+there, and only then is the mark written. An empty store is a legitimate store,
+so "has records in it" could never have answered this.
+
+`adopt` also refuses a folder that is already a store rather than pushing over
+it. That is the same catastrophe seen from the other side: a second machine
+connecting the shared folder must not overwrite everybody's week with whatever
+that browser happens to hold.
+
+**A batch of writes could half-fail in silence.** `write` answers with a status
+and never throws, which is right for one record and a trap for three thousand:
+once the status is `stale` every later call returns immediately having done
+nothing, so the loop finishes quickly and the folder holds a fraction. A product
+checking `stale` once before the loop — the obvious way to write it — cannot see
+this. `writeAll` stops at the first failure and hands back what did not land,
+which is the only thing that lets a caller refuse to call the folder complete.
+
+**One file per record makes the record count the read cost of every start.**
+Wochenwerk's calendar was 15,203 files, because a daily series was written out as
+one appointment per day; reading that folder took tens of seconds on every
+launch, and the first upload was slow enough to be interrupted halfway, which is
+what made the first finding fatal rather than merely wrong. The package is not
+going to batch files together — §2.1 of the conventions and the whole conflict
+argument rest on one record per file. What follows is for products: if a record
+count is unbounded by anything a household does by hand, the model is wrong
+before the store is. Wochenwerk now stores the rule and derives its days, and the
+same folder is nine files.
+
 ## What is not settled
 
 **Whether the conflict-detection rule holds outside Dropbox.** Still open, and it

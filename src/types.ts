@@ -139,6 +139,23 @@ export interface AblageOptions {
    reported without something to report about the two sides. conventions.md §1.1
    already makes identity a UUID and §1.4 already gives `updatedAt` a reader, so
    this is a filename convention rather than a new obligation. */
+/** What `adopt` did, and where it stopped if it stopped. */
+export interface Adoption {
+  adopted: boolean;
+  /** `already`: the folder is a store — read it rather than pushing over it.
+      `incomplete`: not everything landed, so the folder was left unmarked.
+      `unreachable`: everything landed but the mark could not be written. */
+  reason?: 'already' | 'incomplete' | 'unreachable';
+  written: number;
+}
+
+/** What a batch of writes achieved, and what it did not. */
+export interface Written {
+  written: number;
+  /** The records from the first failure onward, none of which were written. */
+  missed: Stored[];
+}
+
 export interface Stored {
   id: string;
   updatedAt: number;
