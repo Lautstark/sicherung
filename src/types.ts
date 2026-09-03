@@ -131,6 +131,22 @@ export interface AblageOptions {
   app: string;
   /** One folder per kind of record. A product declares what it keeps. */
   kinds: readonly string[];
+  /**
+   * The shape this build writes, stamped on every record as `v`.
+   *
+   * The Ablage is the one interface in this family that crosses a machine
+   * boundary: a calendar on a laptop writes, a board on a wall reads, and the
+   * two are separate deployments that can be weeks apart. Every other interface
+   * here carries a version — a Sicherung has one in its envelope, an .obz is a
+   * documented format — and this one did not, because it reads as "our database,
+   * only on disk" rather than as a wire format. It is a wire format.
+   *
+   * Absent means 1, and a record written before this existed has no `v` and is
+   * read as 1. Raise it when the shape of a record changes in a way an older
+   * build would misread — not when a field is added that an older build can
+   * ignore, which is most of them.
+   */
+  version?: number;
   now?: () => number;
 }
 
@@ -159,6 +175,8 @@ export interface Written {
 export interface Stored {
   id: string;
   updatedAt: number;
+  /** Stamped by `write`. Absent on anything written before versions existed. */
+  v?: number;
   [field: string]: unknown;
 }
 export interface Listed {

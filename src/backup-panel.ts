@@ -9,9 +9,10 @@
  *
  * This module is the same correction applied to the half that was left behind.
  * Four products drew this panel out of `actionsFor` and `lineFor` — bildhaft
- * 211 lines, vorlaut-editor 170, mitreden 161, druckwerk 112 — and by the time
- * they were read side by side they had drifted in four ways that no test could
- * see, because every copy was internally consistent:
+ * 211 lines, vorlaut-editor 170, mitreden 161, and druckwerk 112 before that
+ * product was deleted — and by the time they were read side by side they had
+ * drifted in four ways that no test could see, because every copy was
+ * internally consistent:
  *
  *   - **Only bildhaft carried a headline.** The one line that says which folder
  *     is being written without unfolding the panel, and the only one that keeps

@@ -106,13 +106,35 @@ export class Ablage {
   #seen = new Map<string, number>();
   #timer: ReturnType<typeof setInterval> | null = null;
 
+  #version: number;
+  /** The highest `v` read out of the folder so far. Absent means 1. */
+  #newest = 1;
+
   constructor(options: AblageOptions) {
     this.#options = { ...options, app: options.app, kinds: options.kinds };
+    this.#version = options.version ?? 1;
     this.#status = Ablage.supported ? { kind: 'off' } : { kind: 'unsupported' };
   }
 
   get status(): AblageStatus {
     return this.#status;
+  }
+
+  /**
+   * The highest shape seen in the folder, and whether it is beyond this build.
+   *
+   * The Ablage crosses a machine boundary — a calendar on a laptop writes, a
+   * board on a wall reads, and the wall does not reload for weeks. Everything
+   * else in this family that crosses such a boundary carries a version; this did
+   * not, because it reads as "our database, only on disk". It is a wire format.
+   *
+   * Answered from what has actually been read, so it means nothing before a read
+   * has happened. A product asks after `all()` or `pullFromFolder()` and says so
+   * where the person can see it; this package deliberately does not turn it into
+   * a status, because refusing to draw is a product's decision and not a folder's.
+   */
+  get shape(): { writes: number; sawNewer: boolean } {
+    return { writes: this.#version, sawNewer: this.#newest > this.#version };
   }
 
   subscribe(listener: (status: AblageStatus) => void): () => void {
@@ -297,7 +319,14 @@ export class Ablage {
   #parse(text: string): Stored | null {
     try {
       const value = JSON.parse(text) as Stored;
-      return value && typeof value === 'object' && typeof value.id === 'string' ? value : null;
+      if (!value || typeof value !== 'object' || typeof value.id !== 'string') return null;
+      /* A record written by a build that knows a shape this one does not. Read
+         it anyway — refusing would empty a household's calendar over a field
+         nobody needed — but remember, so the product can say so out loud rather
+         than drawing a week it may have misread. */
+      const wrote = Number(value.v) || 1;
+      if (wrote > this.#newest) this.#newest = wrote;
+      return value;
     } catch {
       // A half-written or hand-edited file is not a crash: it is a file this
       // package does not recognise, and the ones beside it still read.
@@ -316,7 +345,10 @@ export class Ablage {
     try {
       const file = await dir.getFileHandle(`${record.id}.json`, { create: true });
       const writable = await file.createWritable();
-      await writable.write(JSON.stringify(record, null, 2));
+      /* `v` last, so it reads at the foot of the file rather than above the
+         record's own fields — this is a file a person opens when something has
+         gone wrong, and the shape number is not what they came for. */
+      await writable.write(JSON.stringify({ ...record, v: this.#version }, null, 2));
       await writable.close();
       this.#seen.set(`${kind}/${record.id}`, Number(record.updatedAt) || 0);
       return this.#ok();

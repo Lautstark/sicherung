@@ -3,8 +3,9 @@
 A backup that writes itself into a folder the user picked.
 
 Shared by [bildhaft](https://github.com/Lautstark/bildhaft),
-[mitreden](https://github.com/Lautstark/mitreden) and
-[vorlaut](https://github.com/Lautstark/vorlaut). MIT.
+[mitreden](https://github.com/Lautstark/mitreden),
+[vorlaut-editor](https://github.com/Lautstark/vorlaut-editor) and
+[wochenwerk](https://github.com/Lautstark/Wochenwerk). MIT.
 
 ## Why a folder and not a cloud account
 
@@ -63,6 +64,32 @@ confirmButton.onclick = () => backup.confirm();  // needs a user gesture
 
 onEveryEdit(() => backup.schedule());  // debounced
 ```
+
+### The shape a record was written in
+
+The Ablage is the one interface in this family that crosses a **machine
+boundary**: a calendar on a laptop writes, a board on a wall reads, and the two
+are separate deployments that can be weeks apart. Everything else that crosses
+such a boundary carries a version — a Sicherung has one in its envelope, an
+`.obz` is a documented format. This did not, because it reads as "our database,
+only on disk". It is a wire format, and it has one now.
+
+```js
+const store = new Ablage({ app: 'wochenwerk', kinds: KINDS, version: 2 });
+// after a read:
+if (store.shape.sawNewer) say('Der Kalender ist neuer als diese Anzeige.');
+```
+
+`write` stamps `v` on every record. `shape` answers what this build writes and
+whether anything read so far was written by a newer one. Absent means 1, so the
+folders already in the field keep reading — a household whose calendar emptied
+over a missing field would be the worst possible outcome of adding one.
+
+**Reading a newer record does not refuse it.** The package remembers and the
+product decides: refusing to draw is a product's judgement about its own screen,
+not a folder's. Raise `version` when the shape changes in a way an older build
+would *misread* — not when a field is added that an older build can ignore, which
+is most of them.
 
 ### Options
 
@@ -181,7 +208,7 @@ had that the others did not:
 | bildhaft, 211 lines | ✓ | ✓ | ✓ |
 | vorlaut-editor, 170 | — | — | n/a |
 | mitreden, 161 | — | — | German „ “ |
-| druckwerk, 112 | — | — | n/a |
+| druckwerk, 112 (deleted since) | — | — | n/a |
 | wochenwerk | *no panel at all* | | |
 
 The headline is the line a panel's own summary carries, so „Daten" stops being

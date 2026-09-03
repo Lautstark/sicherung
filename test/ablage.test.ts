@@ -523,3 +523,85 @@ describe('handing the folder to something else', () => {
     expect(store.handle()).toBe(tree.dirs.get('Lautstark'));
   });
 });
+
+/*
+ * The shape number, and why this interface of all of them needs one.
+ *
+ * The Ablage is the only thing in this family that crosses a machine boundary
+ * without a format: a calendar on a laptop writes, a board on a wall reads, and
+ * the wall does not reload for weeks. A Sicherung has a version in its envelope;
+ * an .obz is a documented format. This read as "our database, only on disk" and
+ * so nobody gave it one. It is a wire format.
+ */
+describe('the shape a record was written in', () => {
+  const shaped = (tree: FakeTree, version?: number) => {
+    (globalThis as { showDirectoryPicker?: unknown }).showDirectoryPicker = async () => tree;
+    return new Ablage({ app: 'wochenwerk', kinds: KINDS, version });
+  };
+
+  it('stamps what this build writes', async () => {
+    const store = shaped(new FakeTree(), 3);
+    await store.choose();
+    await store.write('termine', record(A));
+    expect((await store.read('termine', A))?.v).toBe(3);
+  });
+
+  it('is 1 when a product does not say', async () => {
+    const store = shaped(new FakeTree());
+    await store.choose();
+    await store.write('termine', record(A));
+    expect((await store.read('termine', A))?.v).toBe(1);
+    expect(store.shape.writes).toBe(1);
+  });
+
+  /* Records written before this existed carry no `v` at all, and there are
+     folders in the field full of them. They must stay readable — a household
+     whose calendar emptied because of a missing field would be the worst
+     possible outcome of adding one.
+
+     Note what this does *not* assert: that a missing `v` counts as 1 rather than
+     as 0. Both leave `#newest` at its floor, so the two are indistinguishable
+     from outside, and a test claiming to hold that rule would be measuring
+     nothing. What is asserted is the part that has consequences — the record
+     comes back, and nothing is flagged as newer. */
+  it('still reads a record that predates versions', async () => {
+    const tree = new FakeTree();
+    const store = shaped(tree, 1);
+    await store.choose();
+    await store.write('termine', record(A));
+    // Strip the stamp the way an older build would have left it.
+    const dir = await tree.getDirectoryHandle('wochenwerk');
+    const kind = await dir.getDirectoryHandle('termine');
+    const file = await kind.getFileHandle(`${A}.json`);
+    const writable = await file.createWritable();
+    await writable.write(JSON.stringify({ id: A, updatedAt: 1 }));
+    await writable.close();
+
+    const back = await store.read('termine', A);
+    expect(back?.id).toBe(A);
+    expect(store.shape.sawNewer).toBe(false);
+  });
+
+  /* The case the whole thing is for: the board is an old build and the calendar
+     has moved on. Read it anyway — refusing would empty a household's week over
+     a field nobody needed — but remember, so the product can say so. */
+  it('notices a record written by a newer build, and still reads it', async () => {
+    const tree = new FakeTree();
+    const newer = shaped(tree, 5);
+    await newer.choose();
+    await newer.write('termine', record(A, 1, { title: 'Kindergarten' }));
+
+    const older = shaped(tree, 2);
+    await older.choose();
+    const back = await older.all('termine');
+    expect(back).toHaveLength(1);
+    expect(back[0]!.title).toBe('Kindergarten');
+    expect(older.shape).toEqual({ writes: 2, sawNewer: true });
+  });
+
+  it('says nothing before anything has been read', async () => {
+    const store = shaped(new FakeTree(), 2);
+    await store.choose();
+    expect(store.shape.sawNewer).toBe(false);
+  });
+});
