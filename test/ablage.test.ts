@@ -605,3 +605,58 @@ describe('the shape a record was written in', () => {
     expect(store.shape.sawNewer).toBe(false);
   });
 });
+
+/**
+ * One folder, a subtree each.
+ *
+ * A vocabulary belongs to the household rather than to any one product, so it
+ * wants a compartment beside the products' own — and the same folder underneath.
+ * Asking for that second compartment used to mean asking the household to pick
+ * the same folder twice, under two names that look alike, which is the thing
+ * `handle()`'s note says this package exists to spare people.
+ */
+describe('following another Ablage’s folder', () => {
+  const shared = () => new Ablage({ app: 'wortschatz', kinds: ['woerterbuch'], follows: 'wochenwerk' });
+
+  it('restores what the leader chose, without ever prompting', async () => {
+    const leader = make(new FakeTree());
+    await leader.choose();
+
+    const follower = shared();
+    expect(await follower.restore()).toEqual({ kind: 'idle', folder: 'Haushalt' });
+  });
+
+  it('is off while the leader has chosen nothing', async () => {
+    expect(await shared().restore()).toEqual({ kind: 'off' });
+  });
+
+  it('writes beside the leader rather than inside it', async () => {
+    const tree = new FakeTree();
+    const leader = make(tree);
+    await leader.choose();
+    await leader.write('termine', record(A));
+
+    const follower = shared();
+    await follower.restore();
+    await follower.write('woerterbuch', record(B));
+
+    // Two compartments under one folder, neither nested in the other.
+    expect([...tree.dirs.keys()].sort()).toEqual(['wochenwerk', 'wortschatz']);
+    expect(tree.dirs.get('wochenwerk')?.dirs.get('termine')?.files.has(`${A}.json`)).toBe(true);
+    expect(tree.dirs.get('wortschatz')?.dirs.get('woerterbuch')?.files.has(`${B}.json`)).toBe(true);
+  });
+
+  it('refuses to choose or forget, because the folder is not its answer to give', async () => {
+    const leader = make(new FakeTree());
+    await leader.choose();
+    const follower = shared();
+    await follower.restore();
+
+    // Loud rather than quiet: a follower choosing would move the leader's
+    // store, and a follower forgetting would drop it. Neither is recoverable
+    // by reading a status afterwards.
+    await expect(follower.choose()).rejects.toThrow(/cannot choose/);
+    await expect(follower.forget()).rejects.toThrow(/cannot forget/);
+    expect(leader.handle()).not.toBeNull();
+  });
+});

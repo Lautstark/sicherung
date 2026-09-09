@@ -129,6 +129,30 @@ export type AblageStatus =
 export interface AblageOptions {
   /** Namespaces the subtree in the chosen folder, and the remembered handle. */
   app: string;
+  /**
+   * Use the folder another Ablage on this origin remembered, instead of one of
+   * this one's own.
+   *
+   * What it is for: a compartment several products share. Four products keep
+   * their own records under their own names — `bildhaft/`, `wochenwerk/` — and
+   * a vocabulary belongs to the household rather than to any of them, so it
+   * wants a subtree of its own beside them and *the same folder underneath*.
+   * Without this, asking for that second subtree means asking the household to
+   * pick the same folder a second time, under a name that looks like the first
+   * — which is exactly what `handle()`'s note says this package exists to spare
+   * people.
+   *
+   * So a follower borrows the leader's remembered handle and keeps its own
+   * `app` for the subtree: `{ app: 'wortschatz', follows: 'bildhaft' }` writes
+   * to `<folder>/wortschatz/` and prompts for nothing, because `bildhaft`
+   * already asked.
+   *
+   * A follower cannot `choose()` or `forget()`. Both are answers about *which
+   * folder*, and that question belongs to whoever asked it; a follower doing
+   * either would move or drop the leader's store as a side effect of tidying a
+   * compartment. It restores, reads, writes and watches like any other.
+   */
+  follows?: string;
   /** One folder per kind of record. A product declares what it keeps. */
   kinds: readonly string[];
   /**

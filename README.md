@@ -91,11 +91,45 @@ not a folder's. Raise `version` when the shape changes in a way an older build
 would *misread* — not when a field is added that an older build can ignore, which
 is most of them.
 
+### A compartment several products share
+
+`app` names two things at once: the subtree inside the chosen folder, and the
+key the folder handle is remembered under. That is right for a product's own
+records and wrong for anything the *household* owns rather than a product — a
+vocabulary, say, which four products would all want to read. Asking for a second
+subtree meant asking the household to pick the same folder twice, under two
+names that look alike.
+
+`follows` separates the two: keep your own subtree, borrow the folder somebody
+already chose.
+
+```js
+const mine   = new Ablage({ app: 'bildhaft', kinds: ['sammlungen', 'saetze'] });
+const shared = new Ablage({ app: 'wortschatz', kinds: ['woerterbuch'], follows: 'bildhaft' });
+
+await mine.restore();
+await shared.restore();   // idle already, and never a prompt
+```
+
+```
+Haushalt/
+  bildhaft/     ← mine
+  wortschatz/   ← shared, and what another product would follow too
+```
+
+A follower **cannot `choose()` or `forget()`** — both throw. Both answer "which
+folder", and that answer belongs to whoever asked the person for it: a follower
+choosing would move the leader's store and a follower forgetting would drop it.
+Neither is a state a caller could recover from by reading a status afterwards,
+so it is loud, and it is a wiring mistake made once at construction. Everything
+else — restore, read, write, watch, conflicts — works as it does anywhere.
+
 ### Options
 
 | | |
 |---|---|
 | `app` | Which product. Namespaces the stored folder. |
+| `follows` | Ablage only. Borrow that app's remembered folder; keep your own subtree. |
 | `stem` | Filename stem. Defaults to `app`. |
 | `produce` | Returns the payload. The only inlet. |
 | `keep` | Dated copies to keep. Default 14. |

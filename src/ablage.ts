@@ -154,7 +154,28 @@ export class Ablage {
      scattering records into what a person thinks of as their backup folder
      would be this package deciding something they did not. */
   get #key(): string {
-    return `ablage:${this.#options.app}`;
+    /* A follower reads and writes the leader's key: one folder, remembered
+       once, with a subtree each. See `AblageOptions.follows`. */
+    return `ablage:${this.#options.follows ?? this.#options.app}`;
+  }
+
+  /** Whether this Ablage is borrowing another's folder. */
+  get #following(): boolean {
+    return this.#options.follows !== undefined;
+  }
+
+  /* The two calls a follower must not make.
+   *
+   * Both answer "which folder", and that answer belongs to whoever asked the
+   * person for it. A follower choosing would move the leader's store; a
+   * follower forgetting would drop it. Neither is a state a caller could
+   * recover from by reading a status, so this is loud rather than quiet: it is
+   * a wiring mistake, made once, at the point the Ablage is constructed. */
+  #refuse(verb: string): never {
+    throw new TypeError(
+      `Ablage "${this.#options.app}" follows "${this.#options.follows}" and cannot ${verb}(): `
+      + `the folder belongs to "${this.#options.follows}".`,
+    );
   }
 
   /* ------------------------------------------------------------- opening --- */
@@ -174,6 +195,7 @@ export class Ablage {
 
   /** Open the picker. Must be called from a click. */
   async choose(): Promise<AblageStatus> {
+    if (this.#following) this.#refuse('choose');
     if (!Ablage.supported) return this.#announce({ kind: 'unsupported' });
     let folder: Dir;
     try {
@@ -204,6 +226,7 @@ export class Ablage {
 
   /** Put the folder down. The files stay where they are. */
   async forget(): Promise<AblageStatus> {
+    if (this.#following) this.#refuse('forget');
     this.unwatch();
     await forgetFolder(this.#key);
     this.#folder = null;
