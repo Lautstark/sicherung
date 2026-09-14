@@ -95,6 +95,98 @@ describe('the panel with a folder', () => {
   });
 });
 
+/*
+ * A press that takes a second is a press that can be made twice.
+ *
+ * A household connected a folder on 2026-09-14, pressed „Ordner ‚Lautstark‘
+ * anlegen“, saw nothing move, and pressed it again. The first press had already
+ * nested and was somewhere in the middle of writing the store; the second
+ * nested again, into the folder the first had just made. What was left was a
+ * marked store at `Lautstark/Lautstark/wochenwerk` and an abandoned, unmarked
+ * half of one at `Lautstark/wochenwerk` — and an unmarked folder is precisely
+ * what the next device reads as unclaimed and adopts over.
+ *
+ * Nothing was slow or broken. The buttons were simply still there and still
+ * pressable, because the panel does not redraw until the work it started is
+ * finished.
+ */
+describe('a button that has been pressed', () => {
+  const settled = () => new Promise((done) => setTimeout(done, 0));
+  const press = (node: HTMLElement, label: string) => {
+    const found = [...node.querySelectorAll('button')].find((b) => b.textContent === label);
+    if (!found) throw new Error(`no button says "${label}": ${buttons(node).join(', ')}`);
+    found.click();
+    return found;
+  };
+
+  /* A folder holding nothing of ours: the one case where the panel asks. */
+  const asked = async (extra = {}) => {
+    const tree = new FakeTree('Dropbox');
+    const store = make(tree);
+    const panel = panelFor(store, extra);
+    press(panel.node, 'Ordner wählen …');
+    await settled();
+    return { tree, store, panel };
+  };
+
+  it('asks where the folder should go, before anything is made', async () => {
+    const { panel } = await asked();
+    expect(words(panel.node)).toContain('In „Dropbox“ liegt noch nichts von Lautstark');
+    expect(buttons(panel.node)).toEqual(['Ordner „Lautstark“ anlegen', '„Dropbox“ direkt benutzen']);
+  });
+
+  it('shuts at the press, rather than when the work it started is done', async () => {
+    const { panel } = await asked();
+    const made = press(panel.node, 'Ordner „Lautstark“ anlegen');
+    /* Now, in the same tick as the click, and not one await later. */
+    expect(made.disabled).toBe(true);
+    expect([...panel.node.querySelectorAll('button')].every((b) => b.disabled)).toBe(true);
+    await settled();
+  });
+
+  it('nests once when it is pressed twice', async () => {
+    const { tree, store, panel } = await asked();
+    const nest = vi.spyOn(store, 'nest');
+    const made = press(panel.node, 'Ordner „Lautstark“ anlegen');
+    made.click();
+    made.click();
+    await settled();
+    expect(nest).toHaveBeenCalledTimes(1);
+    /* The shape the household was left with, and the reason this matters: the
+       shallow one is unmarked, and unmarked reads as unclaimed. */
+    expect([...(tree.dirs.get('Lautstark') as FakeTree).dirs.keys()]).not.toContain('Lautstark');
+    expect(store.handle()).toBe(tree.dirs.get('Lautstark'));
+  });
+
+  it('adopts once when it is pressed twice', async () => {
+    let adoptions = 0;
+    const { panel } = await asked({ adopt: async () => { adoptions++; return 'pushed'; } });
+    const made = press(panel.node, 'Ordner „Lautstark“ anlegen');
+    made.click();
+    await settled();
+    expect(adoptions).toBe(1);
+  });
+
+  it('is pressable again once the work is done', async () => {
+    const { panel } = await asked();
+    press(panel.node, 'Ordner „Lautstark“ anlegen');
+    await settled();
+    expect([...panel.node.querySelectorAll('button')].some((b) => b.disabled)).toBe(false);
+    expect(buttons(panel.node)).toEqual(['Anderer Ordner', 'Ordner vergessen']);
+  });
+
+  /* The product's own `changed()` redraws half the screen, and this panel is
+     often on it. A redraw must not hand back a fresh, enabled button while the
+     press that caused it is still running. */
+  it('stays shut through a redraw somebody else asked for', async () => {
+    const { panel } = await asked();
+    press(panel.node, 'Ordner „Lautstark“ anlegen');
+    panel.refresh();
+    expect([...panel.node.querySelectorAll('button')].every((b) => b.disabled)).toBe(true);
+    await settled();
+  });
+});
+
 describe('the panel where the folder went out of reach', () => {
   it('warns, and makes trying again the one action it would pick', async () => {
     const tree = new FakeTree();

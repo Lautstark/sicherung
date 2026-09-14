@@ -472,9 +472,27 @@ export class Ablage {
    * out: they pick where it should live, and the folder is made there. It is
    * also the difference between a tidy `Lautstark/` and a Dropbox root with
    * `wochenwerk/` and `bildhaft/` scattered through it — which is why the
-   * product asks first, and why the package does not decide this by itself. */
+   * product asks first, and why the package does not decide this by itself.
+   *
+   * Asking twice is asking once. This is a step in setting up, it takes as long
+   * as a folder takes to make, and it is reached from a button — so the second
+   * call is not a hypothesis: a household pressed the panel's button twice on
+   * 2026-09-14 while the first press was still writing, and the store ended up
+   * in `Lautstark/Lautstark` with an abandoned, unmarked half of one in
+   * `Lautstark`. Unmarked is exactly what the next device reads as unclaimed.
+   * `adopt` was written to survive being asked twice — it has the mark to look
+   * at — and this was the step beside it that was not.
+   *
+   * Spelling is not held against anybody, for the same reason `folderHolding`
+   * does not hold it against them: macOS and Windows answer a request for
+   * `Lautstark` with the `lautstark` that is already there, so comparing byte
+   * for byte would make a second level on exactly the machines where the first
+   * folder was found. */
   async nest(name: string): Promise<AblageStatus> {
     if (!this.#folder) return this.#status;
+    /* Already standing in it. The folder is the one that was asked for, and it
+       is already the remembered one — `choose` or an earlier `nest` wrote it. */
+    if (this.#folder.name.toLowerCase() === name.toLowerCase()) return this.#status;
     try {
       const inside = (await this.#folder.getDirectoryHandle(name, { create: true })) as Dir;
       this.#folder = inside;

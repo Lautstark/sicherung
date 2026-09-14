@@ -318,6 +318,35 @@ describe('making the folder they did not make', () => {
     expect([...(tree.dirs.get('Lautstark') as FakeTree).dirs.keys()]).toEqual(['wochenwerk']);
   });
 
+  /* Seen in a household on 2026-09-14: the panel's button was pressed twice
+     while the first press was still running, and the second nest made a
+     `Lautstark` inside the `Lautstark` the first had just made. The panel is
+     shut against that now, but the guard belongs here too — every other caller
+     can make the same call twice, and none of them wants the second level. */
+  it('is already there, and does not make a second level of the same name', async () => {
+    const tree = new FakeTree('Dropbox');
+    const store = make(tree);
+    await store.choose();
+    await store.nest('Lautstark');
+    const home = tree.dirs.get('Lautstark') as FakeTree;
+    expect(await store.nest('Lautstark')).toEqual({ kind: 'idle', folder: 'Lautstark' });
+    expect([...home.dirs.keys()]).toEqual([]);
+    expect(store.handle()).toBe(home);
+    await store.write('termine', record(A));
+    expect([...home.dirs.keys()]).toEqual(['wochenwerk']);
+  });
+
+  /* Generous about spelling for the same reason `folderHolding` is: macOS and
+     Windows hand back a folder called `lautstark` for a `Lautstark` that was
+     asked for, and a second level is the one answer nobody wants. */
+  it('counts a folder of that name as that folder, however it is spelled', async () => {
+    const tree = new FakeTree('lautstark');
+    const store = make(tree);
+    await store.choose();
+    expect(await store.nest('Lautstark')).toEqual({ kind: 'idle', folder: 'lautstark' });
+    expect([...tree.dirs.keys()]).toEqual([]);
+  });
+
   it('comes back to the folder it made, not to the one above it', async () => {
     const tree = new FakeTree('Dropbox');
     const first = make(tree);

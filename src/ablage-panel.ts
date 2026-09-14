@@ -140,29 +140,81 @@ export function wherePanel(options: PanelOptions): Panel {
      rebuilt to stop doing. */
   let asking: string | null = null;
 
+  /* One press at a time, and shut at the press rather than at the redraw.
+   *
+   * Every button here starts something that takes a while and redraws the panel
+   * when it is finished — so in between, the buttons that started it are still
+   * on screen and still pressable. A household pressed „Ordner ‚Lautstark‘
+   * anlegen“ on 2026-09-14, saw nothing move, and pressed it again: the first
+   * press had nested and was writing the store, the second nested into the
+   * folder the first had just made, and what was left behind in the shallower
+   * one was half a store with no mark on it. The next device to reach that
+   * folder reads unmarked as unclaimed.
+   *
+   * `nest` is idempotent now and would absorb that particular second press, but
+   * that is the wrong place to be relieved about it: a button whose work is
+   * under way and which still looks pressable is a lie about what is happening,
+   * whatever the second press would have done. So it is held shut here, for
+   * every action the panel offers — none of them is one to run two of. */
+  let working = false;
+
+  /* Shut every control that is drawn right now. Called twice for a reason: once
+     synchronously at the press, because a second press arrives long before any
+     await resolves, and once at the end of a redraw, because a redraw somebody
+     else asked for — the product's own `changed()` reaches this panel — would
+     otherwise hand back a fresh and perfectly pressable button.
+
+     This panel's own rows and not `below`'s: those nodes belong to the product,
+     which may well hand back the same ones on every call, and a button this
+     panel disabled in a node it does not own is a button nothing here will ever
+     enable again. Ours are built afresh by `acts` on every draw. */
+  const shut = (): void => {
+    for (const control of node.querySelectorAll('.acts button')) {
+      (control as HTMLButtonElement).disabled = true;
+    }
+  };
+
+  const press = (job: () => Promise<unknown>) => (): void => {
+    if (working) return;
+    working = true;
+    shut();
+    void job().finally(() => {
+      working = false;
+      refresh();
+    });
+  };
+
   const settle = async (nest: boolean) => {
     asking = null;
     if (nest) await options.store.nest(home);
     const went = await options.adopt();
     options.say(went === 'pushed' ? say.pushed : went === 'pulled' ? say.pulled : say.incomplete);
     options.changed();
-    refresh();
   };
 
   const choose = async () => {
     await options.store.choose();
     const status = options.store.status;
-    if (status.kind === 'off' || status.kind === 'unsupported') return refresh();
+    if (status.kind === 'off' || status.kind === 'unsupported') return;
     const gathered = (await options.store.folders())
       .some((name) => siblings.includes(name.toLowerCase()));
     if (!(await options.store.adopted()) && !gathered) {
       asking = named(status);
-      return refresh();
+      return;
     }
     await settle(false);
   };
 
+  /* A redraw always ends with the panel telling the truth about whether it is
+     busy — including a redraw asked for from outside, which is why this is a
+     wrapper rather than a line at the foot of `draw`: `draw` has more than one
+     way out. */
   function refresh(): void {
+    draw();
+    if (working) shut();
+  }
+
+  function draw(): void {
     const status = options.store.status;
     const held = status.kind !== 'off' && status.kind !== 'unsupported';
     const stale = status.kind === 'stale' || status.kind === 'failed';
@@ -177,8 +229,8 @@ export function wherePanel(options: PanelOptions): Panel {
         make('p', 'small', say.empty(asking)),
         make('pre', 'tree', `${asking}\n└── ${home}`),
         acts(
-          button(say.make(home), 'primary', () => void settle(true)),
-          button(say.direct(asking), 'quiet', () => void settle(false)),
+          button(say.make(home), 'primary', press(() => settle(true))),
+          button(say.direct(asking), 'quiet', press(() => settle(false))),
         ),
       );
       return;
@@ -202,7 +254,7 @@ export function wherePanel(options: PanelOptions): Panel {
       add(
         make('p', 'small muted', `${say.offer} ${say.noneYet}`),
         make('p', 'small muted', other ? say.elsewhere(other.app, other.folder) : say.same),
-        acts(button(say.pick, '', () => void choose())),
+        acts(button(say.pick, '', press(choose))),
       );
     } else {
       add(state(
@@ -215,11 +267,11 @@ export function wherePanel(options: PanelOptions): Panel {
       }
       if (options.share) add(sharing());
       add(acts(
-        stale ? button(say.retry, 'primary', () => void choose()) : null,
+        stale ? button(say.retry, 'primary', press(choose)) : null,
         status.kind === 'needs-permission'
-          ? button(say.allow, 'primary', () => void options.store.confirm().then(refresh)) : null,
-        button(say.another, 'quiet', () => void choose()),
-        button(say.forget, 'destructive', () => void options.store.forget().then(refresh)),
+          ? button(say.allow, 'primary', press(() => options.store.confirm())) : null,
+        button(say.another, 'quiet', press(choose)),
+        button(say.forget, 'destructive', press(() => options.store.forget())),
       ));
     }
 
