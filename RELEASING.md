@@ -1,9 +1,14 @@
 # Releasing
 
-There is no registry publish. A **git tag is the release** — consumers resolve
-`github:Lautstark/sicherung#v1.0.0` against the tags in this repo, so pushing a
-tag is the moment a version becomes real for bildhaft, mitreden and vorlaut.
-Treat it as publishing, because it is.
+**Since 2026-09-16 this package is published to npmjs.org as
+`@lautstark/sicherung`, prebuilt.** `dist/` is in the tarball and there is no
+`prepare` script any more: a consumer installs compiled output and compiles
+nothing. The `github:Lautstark/sicherung#vX.Y.Z` pins still resolve for every
+tag cut before that date, and no tag cut after it carries a build step — so a
+consumer that wants anything newer than v1.16.1 takes it from npm.
+
+A **git tag is still the release**, and it is still the thing that must never
+move. What changed is who cuts it: see below.
 
 ## Cutting v1.0.0
 

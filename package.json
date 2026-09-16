@@ -46,6 +46,7 @@
   "files": [
     "dist",
     "src",
+    "CHANGELOG.md",
     "README.md",
     "LICENSE"
   ],
@@ -53,7 +54,6 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "prepare": "npm run build",
     "preversion": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
@@ -68,5 +68,9 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

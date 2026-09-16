@@ -3,8 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
-    # A tag is the release artifact for this package — consumers resolve
-    # `#semver:` against these — so tags get the same gate as main.
+    # Tags are cut by release.yml now, and a tag it pushes does not start
+    # this workflow. The trigger stays for a tag somebody pushes by hand,
+    # which is the one case the check below still has to catch.
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -15,7 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Fail before the slow steps if the tag and package.json disagree.
+      # Fail before the slow steps if the tag and package.json disagree. Only
+      # reachable by a hand-pushed tag since 2026-09-16; release.yml makes the
+      # same check of the commit it tags.
       - name: Tag matches package.json version
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
@@ -40,5 +43,6 @@ jobs:
       # data to enter this module — not just a broken test.
       - run: npm test
 
-      # Consumers install from git, so `prepare` runs on their machine.
+      # dist/ ships in the npm tarball, built by release.yml before it packs.
+      # This is the same build, run here so a pull request cannot break it.
       - run: npm run build

@@ -1,0 +1,21 @@
+name: Release
+
+# Every push to main is a candidate release. The workflow this calls runs the
+# gate below, checks the tarball is complete, and lets semantic-release read
+# the commit subjects since the last tag: feat is a minor, fix a patch, feat!
+# a major, anything else no release. Nobody bumps the version by hand.
+# RELEASING.md has the whole of it.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  release:
+    uses: Lautstark/.github/.github/workflows/release.yml@main
+    with:
+      gate: npm run typecheck && npm test && npm run build
+    secrets: inherit
