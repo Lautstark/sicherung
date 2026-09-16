@@ -1,58 +1,64 @@
 # Releasing
 
 **Since 2026-09-16 this package is published to npmjs.org as
-`@lautstark/sicherung`, prebuilt.** `dist/` is in the tarball and there is no
-`prepare` script any more: a consumer installs compiled output and compiles
-nothing. The `github:Lautstark/sicherung#vX.Y.Z` pins still resolve for every
-tag cut before that date, and no tag cut after it carries a build step — so a
-consumer that wants anything newer than v1.16.1 takes it from npm.
+`@lautstark/sicherung`, prebuilt, by CI, from the commit subjects.** Nobody
+runs `npm version` any more and nobody writes a tag. `dist/` is in the tarball
+and there is no `prepare` script: a consumer installs compiled output and
+compiles nothing.
+
+The `github:Lautstark/sicherung#vX.Y.Z` pins still resolve for every tag cut
+before that date. No tag cut after it carries a build step, so a consumer that
+wants anything newer than v1.16.1 takes it from npm:
+
+```
+npm install @lautstark/sicherung@^1.17.0
+```
 
 A **git tag is still the release**, and it is still the thing that must never
-move. What changed is who cuts it: see below.
+move. What changed is who cuts it.
 
-## Cutting v1.0.0
+## What happens on a push to main
 
-`package.json` already says `1.0.0` and has never been tagged, so `npm version`
-has nothing to bump. Run the gate by hand and tag:
+`.github/workflows/release.yml` calls the family's reusable workflow in
+`Lautstark/.github`, which:
 
-```
-npm run typecheck && npm test && npm run build
-git tag -a v1.0.0 -m "1.0.0"
-git push --follow-tags
-```
+1. runs the gate — `npm run typecheck && npm test && npm run build`;
+2. checks that the tarball `npm pack` would ship carries every entry point
+   `package.json` declares, and no `prepare` script;
+3. runs `semantic-release`, configured in `release.config.mjs`.
 
-Annotated, because that is what `npm version` creates and the tags should not
-be two different kinds of object.
+semantic-release reads every commit since the last `v*` tag and decides:
 
-## Every release after that
+| subjects since the last tag contain | bump | example |
+|---|---|---|
+| `feat!:`, or a `BREAKING CHANGE:` trailer | **major** | a new `Status` kind, a new inlet beside `produce` |
+| `feat:` | **minor** | a new export, a new optional option |
+| `fix:`, `perf:` | **patch** | a fix with no API change |
+| only `docs:`, `test:`, `ci:`, `build:`, `chore:`, `refactor:` | none | the run is green and nothing is published |
 
-From a clean `main`:
+If there is a bump, it writes the version into `package.json` and the
+lockfile's mirror of it, prepends the notes to `CHANGELOG.md`, commits the
+three as `chore(release): x.y.z`, tags that commit `vx.y.z`, publishes the
+tarball to npmjs.org with provenance, and writes a GitHub release with the
+same notes. Then it checks that the tag on the commit, `package.json` and what
+the registry answers for that version are one number — the check the old
+tag-triggered CI made, asked of the commit it just tagged.
 
-```
-npm version minor -m "chore(release): %s"
-```
+**So the bump is decided when the commit is written, not when the release is
+cut.** The commit subject is the release note and the version at once, which
+is why `commit-messages.yml` refuses a subject without a prefix: a commit that
+says nothing about itself would ship silently under the next `fix:`.
 
-The message template is not optional. `npm version`'s default subject is the
-bare number, and `.githooks/commit-msg` refuses it — the hook arrived after this
-document did, and for one release the two disagreed with each other rather than
-with the person following them.
+## Which prefix
 
-`preversion` runs typecheck, tests and the build first, so a broken tree cannot
-be tagged. Nothing has left your machine yet — check `git show --stat HEAD`,
-then `git push --follow-tags`. The push is deliberately separate: a pushed tag
-can be resolved by a consumer within seconds and must never be moved
-afterwards, so the irreversible half is its own command.
+The rules from before still hold; only the spelling changed.
 
-## Which bump
-
-The three products pin by exact tag, so a bump reaches nobody until a consumer
-changes its `package.json`. That makes the number documentation rather than a
-resolver input — which is a reason to keep it honest, not a reason to relax.
-
-- **patch** — a fix with no API change.
-- **minor** — new exports, new optional options.
-- **major** — anything a consumer must change code for: a removed export, a new
-  `Status` kind they must draw, a changed return shape.
+- **`fix:`** — a fix with no API change.
+- **`feat:`** — new exports, new optional options.
+- **`feat!:`** — anything a consumer must change code for: a removed export, a
+  new `Status` kind they must draw, a changed return shape. Put the reason in a
+  `BREAKING CHANGE:` trailer in the body; it becomes the first paragraph of the
+  release note.
 
 **A new `Status` kind is a major.** A product renders the status as a closed
 set, and a kind it has never heard of renders as nothing at all — which in this
@@ -64,8 +70,42 @@ also always major, whatever the diff size. See the allow-list test in
 `test/sicherung.test.ts`; consumers inherit the licensing behaviour described
 in the README without inheriting the README.
 
+Consumers take this package as a caret range now, and Renovate merges a minor
+or a patch into them on its own once their tests pass. A major waits for a
+person. That is the whole reason the prefix has to be honest: the number is a
+resolver input again, and `feat:` on a change that breaks a consumer reaches
+that consumer's main without anybody reading it.
+
+## What a person still does, once
+
+The workflow stops before semantic-release, green, with a notice, until the
+npm side exists. That side is an account and cannot be created from a
+repository:
+
+1. The `lautstark` organisation on npmjs.org, which owns the `@lautstark`
+   scope. Free for public packages.
+2. The first publish of this package, by hand, from a clean checkout of the
+   tag to publish:
+   ```
+   npm login
+   npm ci && npm run build && npm publish --access public
+   ```
+   npm does not let a workflow create a package that does not exist yet.
+3. Then one of two ways for CI to publish the releases after it:
+   - **Trusted publishing** (no secret to rotate): on npmjs.org, the package →
+     Settings → Trusted Publisher → GitHub Actions, organisation `Lautstark`,
+     repository `sicherung`, workflow `release.yml`. Then set a repository
+     variable `NPM_TRUSTED_PUBLISHING` to `true`.
+   - **A token**: a granular automation token with publish rights on the
+     scope, stored as an organisation secret `NPM_TOKEN`.
+
+After that, every push to main is a candidate release and nothing here needs a
+person again.
+
 ## Never move a published tag
 
-If a tag is wrong, cut the next version. Re-pointing `v1.1.0` leaves consumers
-with lockfiles pinned to a commit that no longer matches the tag, and nothing
-warns them.
+If a tag is wrong, cut the next version: a `fix:` commit. Re-pointing `v1.1.0`
+leaves consumers with lockfiles pinned to a commit that no longer matches the
+tag, and nothing warns them. Since 2026-09-16 that goes for the npm side too —
+a published version cannot be replaced, only deprecated (`npm deprecate`) and
+superseded.
