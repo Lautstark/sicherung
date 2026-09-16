@@ -1,10 +1,10 @@
 name: Release
 
 # Every push to main is a candidate release. The workflow this calls runs the
-# gate below, checks the tarball is complete, and lets semantic-release read
-# the commit subjects since the last tag: feat is a minor, fix a patch, feat!
-# a major, anything else no release. Nobody bumps the version by hand.
-# RELEASING.md has the whole of it.
+# gate below and lets semantic-release read the commit subjects since the
+# last tag: feat is a minor, fix a patch, feat! a major, anything else no
+# release. The tag is the release - there is no registry - and nobody bumps
+# the version by hand. RELEASING.md has the whole of it.
 
 on:
   push:
@@ -15,13 +15,11 @@ jobs:
   release:
     # A called workflow can hold no more than its caller grants, so the grant
     # is written here and not only in Lautstark/.github: the release commit
-    # and tag, the issue semantic-release opens when a release fails, and the
-    # identity token npm trades for a publish credential.
+    # and tag, and the issue semantic-release opens when a release fails.
     permissions:
       contents: write
       issues: write
       pull-requests: write
-      id-token: write
     uses: Lautstark/.github/.github/workflows/release.yml@main
     with:
       gate: npm run typecheck && npm test && npm run build

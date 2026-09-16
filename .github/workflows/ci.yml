@@ -45,6 +45,5 @@ jobs:
       # data to enter this module — not just a broken test.
       - run: npm test
 
-      # dist/ ships in the npm tarball, built by release.yml before it packs.
-      # This is the same build, run here so a pull request cannot break it.
+      # Consumers install from git, so `prepare` runs this on their machine.
       - run: npm run build

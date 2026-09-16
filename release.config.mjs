@@ -11,7 +11,8 @@
 //   release-notes-generator  the notes, from the same commits
 //   changelog                prepends them to CHANGELOG.md
 //   npm                      bumps package.json (and the lockfile's mirror of
-//                            it), publishes the tarball
+//                            it) - and publishes nothing: npmPublish is off,
+//                            there is no registry, the tag is the release
 //   git                      commits the three files back to main as
 //                            "chore(release): x.y.z", which is where the tag
 //                            goes
@@ -27,7 +28,7 @@ export default {
     ['@semantic-release/commit-analyzer', { preset: 'conventionalcommits' }],
     ['@semantic-release/release-notes-generator', { preset: 'conventionalcommits' }],
     ['@semantic-release/changelog', { changelogFile: 'CHANGELOG.md' }],
-    '@semantic-release/npm',
+    ['@semantic-release/npm', { npmPublish: false }],
     ['@semantic-release/git', {
       assets: ['package.json', 'package-lock.json', 'CHANGELOG.md'],
       message: 'chore(release): ${nextRelease.version}\n\n${nextRelease.notes}',
