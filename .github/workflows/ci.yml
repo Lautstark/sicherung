@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'renovate/**']
+    # renovate/**, since 2026-09-16: Renovate merges a branch to main itself
+    # once this run is green on it, and never a branch that has no run.
     # Tags are cut by release.yml now, and a tag it pushes does not start
     # this workflow. The trigger stays for a tag somebody pushes by hand,
     # which is the one case the check below still has to catch.
