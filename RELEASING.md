@@ -84,20 +84,26 @@ repository:
 
 1. The `lautstark` organisation on npmjs.org, which owns the `@lautstark`
    scope. Free for public packages.
-2. The first publish of this package, by hand, from a clean checkout of the
-   tag to publish:
-   ```
-   npm login
-   npm ci && npm run build && npm publish --access public
-   ```
-   npm does not let a workflow create a package that does not exist yet.
-3. Then one of two ways for CI to publish the releases after it:
-   - **Trusted publishing** (no secret to rotate): on npmjs.org, the package →
-     Settings → Trusted Publisher → GitHub Actions, organisation `Lautstark`,
-     repository `sicherung`, workflow `release.yml`. Then set a repository
-     variable `NPM_TRUSTED_PUBLISHING` to `true`.
-   - **A token**: a granular automation token with publish rights on the
-     scope, stored as an organisation secret `NPM_TOKEN`.
+2. A way for CI to publish. One of two:
+   - **A token**: a granular automation token on npmjs.org with read and
+     write on the `@lautstark` scope *and* permission to create packages,
+     stored as an organisation secret `NPM_TOKEN` on GitHub. With this, the
+     first version of every package is published by the workflow itself on
+     the next `feat:` or `fix:` that lands - nothing is done by hand.
+   - **Trusted publishing** (no secret to rotate): npm trusts this workflow's
+     identity directly. It can only be configured on a package that already
+     exists, so the first version is published by hand once, from a clean
+     checkout of `main`:
+     ```
+     npm login
+     npm ci && npm run build && npm publish --access public
+     ```
+     then on npmjs.org: the package → Settings → Trusted Publisher → GitHub
+     Actions, organisation `Lautstark`, repository `sicherung`, workflow
+     `release.yml`; and a repository variable `NPM_TRUSTED_PUBLISHING` set
+     to `true` so the workflow knows to try.
+3. Nothing. Renovate is already installed on the organisation; the first
+   published version is what its `@lautstark/**` rule starts from.
 
 After that, every push to main is a candidate release and nothing here needs a
 person again.
