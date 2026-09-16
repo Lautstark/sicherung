@@ -11,10 +11,17 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions: {}
-
 jobs:
   release:
+    # A called workflow can hold no more than its caller grants, so the grant
+    # is written here and not only in Lautstark/.github: the release commit
+    # and tag, the issue semantic-release opens when a release fails, and the
+    # identity token npm trades for a publish credential.
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
     uses: Lautstark/.github/.github/workflows/release.yml@main
     with:
       gate: npm run typecheck && npm test && npm run build
