@@ -12,9 +12,9 @@
 // implies it too.
 //
 // This package is itself one of the five the preset's @lautstark/** rule is
-// about: released from main by semantic-release, taken by the apps as a
-// caret range, merged into them by Renovate when a minor or a patch passes
-// their tests. Nothing about that is decided here - what this file settles is
+// about: tagged from main by semantic-release, pinned by the apps as a
+// github: tag that Renovate moves when a minor or a patch passes their
+// tests. Nothing about that is decided here - what this file settles is
 // only that this repository's own dependencies follow the family's rules,
 // and there is nothing here to except.
 {
