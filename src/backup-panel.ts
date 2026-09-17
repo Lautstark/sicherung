@@ -102,8 +102,14 @@ export interface BackupPanel {
  * Filled positionally rather than through a placeholder syntax, because this
  * package has no i18n and is not growing one — two consumers have a `t()` and
  * two do not, and a `{folder}` convention here would be a third beside theirs.
+ *
+ * Exported since 2026-09-17, because `svelte/BackupPanel.svelte` draws this
+ * same panel and reads this same table. A second copy over there would be the
+ * fifth of the four this module was written to end, and it would be the worst
+ * of them: internally consistent, in the same repository, under a test that
+ * only ever looks at one of the two.
  */
-interface Words {
+export interface Words {
   note: string;
   off: string;
   saving: string;
@@ -126,7 +132,7 @@ interface Words {
   'save-empty': string;
 }
 
-const WORDS: Record<PanelLang, Words> = {
+export const WORDS: Record<PanelLang, Words> = {
   de: {
     note: 'Wähle einen Ordner, dann wird die Sicherung dort hineingeschrieben, sobald sich etwas ändert.',
     off: 'Noch kein Ordner für Sicherungskopien.',

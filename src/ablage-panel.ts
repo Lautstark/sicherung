@@ -46,7 +46,16 @@ export interface PanelOptions {
   below?: () => (Node | null)[];
 }
 
-const WORDS = {
+/**
+ * Every word this panel says, in one shape per language.
+ *
+ * Exported since 2026-09-17, because `svelte/AblagePanel.svelte` draws this
+ * same panel and reads this same table. The whole argument at the top of this
+ * file is that three products writing their own sentences is three chances to
+ * disagree; two copies of the table inside one package would be the same
+ * mistake with a shorter walk between them.
+ */
+export const WORDS = {
   de: {
     browser: 'In diesem Browser',
     browserNote: 'Auf diesem Gerät, und sonst nirgends. Nichts wird hochgeladen.',

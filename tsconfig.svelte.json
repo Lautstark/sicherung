@@ -1,0 +1,23 @@
+{
+  /* The second half of `npm run typecheck`.
+   *
+   * `tsconfig.build.json` emits `src/` with `tsc`, and the components in
+   * `svelte/` are deliberately outside it: they ship as source, the consumer's
+   * own plugin compiles them, and `tsc` cannot emit a `.svelte` at all — a rune
+   * module that reached it would come out with `$state(0)` as a call to an
+   * undefined identifier and be published that way (conventions.md §6.0).
+   *
+   * Outside the build must not mean unchecked. `svelte-check` reads this file,
+   * checks the components against this package's own `src/` types, and that
+   * pair is not vacuous: measured 2026-09-17, a component calling a typed
+   * helper wrongly is reported across the boundary.
+   *
+   * `src` is in `include` because the components import from it and a checker
+   * that could not see it would answer `any` to every question. Nothing here
+   * emits — `noEmit` is inherited and is the whole arrangement. */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["svelte"]
+  },
+  "include": ["svelte/**/*.svelte", "svelte/**/*.ts", "src"]
+}

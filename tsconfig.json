@@ -15,7 +15,12 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
     "noEmit": true,
-    "types": ["node", "vitest/globals"]
+    /* `svelte` is here for its ambient `declare module '*.svelte'`, which is
+       what lets test/css-contract.test.ts import a component at all. It types
+       one as a component and no more than that — checking what a component
+       does with its props is svelte-check's job, through tsconfig.svelte.json,
+       and the two together are the `typecheck` script. */
+    "types": ["node", "vitest/globals", "svelte"]
   },
   "include": ["src", "test"]
 }

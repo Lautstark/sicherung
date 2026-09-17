@@ -287,6 +287,85 @@ styles these kinds by name. An unknown kind falls back to the grey `off` dot
 and reads as *deliberately not set up* — which is why a new `Status` kind is a
 major for the CSS as well as for this package.
 
+## The same panels in Svelte — `@lautstark/sicherung/svelte/*`
+
+Since 1.17. The vanilla exports above stay until no consumer is left; these are
+beside them, not instead of them.
+
+```svelte
+<script>
+  import BackupPanel from '@lautstark/sicherung/svelte/BackupPanel';
+  import AblagePanel from '@lautstark/sicherung/svelte/AblagePanel';
+</script>
+
+<BackupPanel {backup} say={notify} {lang} headline={(text) => state = text} />
+<AblagePanel {store} {adopt} {changed} say={notify} {lang}>
+  {#snippet below()}<MyOwnExportButton />{/snippet}
+</AblagePanel>
+```
+
+Same options, same emitted markup, same words — `WORDS` is imported from the
+vanilla module rather than copied, because a second table in the same package
+is the drift that module exists to have ended. `@lautstark/design`'s
+conventions.md §6.8 is the specification; what follows is every place they are
+deliberately not the same.
+
+- **`lang` is a prop.** The vanilla backup panel takes a thunk and reads it on
+  every paint, because mitreden changes language without reloading. That is
+  what a vanilla module has instead of reactivity; here the framework has it.
+- **No `refresh` and no `dispose`.** Both panels hold their status through
+  `subscribe` in an `$effect` that returns the unsubscribe. The `Ablage` panel
+  gains that where the vanilla one has nothing to dispose: a component can be
+  unmounted while a folder is being adopted, which a node a page keeps cannot.
+- **`BackupPanel` renders nothing** where the browser has no picker, which is
+  the vanilla function's `null`.
+- **`below` is a snippet**, where the vanilla option is `() => (Node | null)[]`.
+
+Nothing is imported from `@lautstark/design` at runtime — a provider package
+does not gain it as a dependency (§6.0). The panels emit the class vocabulary
+and design draws it, which is what `test/css-contract.test.ts` holds them to,
+in every state, vanilla and Svelte alike.
+
+### The rescue sheet — `./svelte/Rescue`, `./svelte/RescueBody`, `./svelte/RescueFoot`
+
+What a product says when the database it found was not one it can read: every
+record still there, untouched, and nothing may happen next until the person
+holding them has them in a file.
+
+```svelte
+<script>
+  import { Rescuing } from '@lautstark/sicherung/svelte/rescuing';
+
+  const s = new Rescuing(dump.version, countRecords(dump), words, {
+    save: () => downloadJson(asFile(dump), 'rettung'),
+    discard: () => discardEverything(),
+    again: () => boot(),
+  });
+  s.close = sheet.close;   // the host's sheet; this package has none
+</script>
+```
+
+The words are the product's, because a shared component carries no German; the
+file's name is the product's too. `saved` is the whole enforcement of *handed
+their data before anything is destroyed* — the discard cannot be pressed until
+the download has been through.
+
+**The discard closes the sheet after the await, not before it.** Both products
+this comes from wrote the other order in one of their two copies, and it costs
+them the failure path: with the sheet closed there is no region left to say
+*Fehlgeschlagen* into and the boot has already restarted. This is a behaviour
+change and not a port, and it is the reason `discarded` — the flag a host's
+`onClose` reads to know a dismissal from a discard — is a plain field and not
+the in-flight `going`, which is false again after a failure.
+
+### Tooling, if you are consuming these
+
+The components ship as raw `.svelte` and are compiled in your build. That works
+because every entry declares the `svelte` export condition, which is what keeps
+the package out of dependency pre-bundling; without it a build still succeeds
+and dev mode silently compiles a second copy of every component and of the rune
+module. `svelte` is a peer dependency, `^5`.
+
 ## Releasing
 
 A git tag is the release; see [RELEASING.md](RELEASING.md).

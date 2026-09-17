@@ -41,35 +41,66 @@
     "./backup-panel": {
       "types": "./dist/backup-panel.d.ts",
       "default": "./dist/backup-panel.js"
+    },
+    "./svelte/BackupPanel": {
+      "svelte": "./svelte/BackupPanel.svelte",
+      "default": "./svelte/BackupPanel.svelte"
+    },
+    "./svelte/AblagePanel": {
+      "svelte": "./svelte/AblagePanel.svelte",
+      "default": "./svelte/AblagePanel.svelte"
+    },
+    "./svelte/Rescue": {
+      "svelte": "./svelte/Rescue.svelte",
+      "default": "./svelte/Rescue.svelte"
+    },
+    "./svelte/RescueBody": {
+      "svelte": "./svelte/RescueBody.svelte",
+      "default": "./svelte/RescueBody.svelte"
+    },
+    "./svelte/RescueFoot": {
+      "svelte": "./svelte/RescueFoot.svelte",
+      "default": "./svelte/RescueFoot.svelte"
+    },
+    "./svelte/rescuing": {
+      "svelte": "./svelte/rescuing.svelte.ts",
+      "default": "./svelte/rescuing.svelte.ts"
     }
   },
   "files": [
     "dist",
     "src",
+    "svelte",
     "CHANGELOG.md",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && svelte-check --tsconfig ./tsconfig.svelte.json --threshold warning",
     "test": "vitest run",
     "prepare": "npm run build"
   },
   "dependencies": {
     "idb": "^8.0.3"
   },
+  "peerDependencies": {
+    "svelte": "^5"
+  },
   "devDependencies": {
-    "@lautstark/design": "github:Lautstark/design#v1.31.3",
+    "@lautstark/design": "github:Lautstark/design#v1.33.1",
     "@semantic-release/changelog": "^7.0.0",
     "@semantic-release/git": "^11.0.1",
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@types/node": "^22.20.1",
     "conventional-changelog-conventionalcommits": "^9.3.1",
     "fake-indexeddb": "^6.0.0",
     "jsdom": "^30.0.1",
     "semantic-release": "^25.0.9",
+    "svelte": "^5.57.0",
+    "svelte-check": "^4.7.6",
     "typescript": "^5.7.2",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20"

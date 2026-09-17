@@ -1,9 +1,11 @@
-/* The CSS contract, conventions.md §4.12: a shared module that emits markup
+// @vitest-environment jsdom
+/*
+ * The CSS contract, conventions.md §4.12: a shared module that emits markup
  * brings its CSS. Until 2026-09-16 that was prose; this is the check.
  *
- * Every class name the module puts on a node has to be one
+ * Every class name a module puts on a node has to be one
  * @lautstark/design/components.css draws - a selector in that file names it.
- * The panel is rendered in every state it has, the class tokens of every node
+ * Each panel is rendered in every state it has, the class tokens of every node
  * under it are collected, and the difference against the stylesheet has to be
  * empty. A name that is missing is either a rule that belongs in
  * components.css and is not there yet, or a class the module should not be
@@ -13,41 +15,55 @@
  * does not import it at runtime, the products do, and what is asserted here
  * is that what they import draws what this package emits.
  *
- * drawnClasses() is three copies today - sicherung, bildquelle, stimmquelle -
- * and belongs in @lautstark/design beside the file it reads, the day a
- * release of design can carry it there. Written 2026-09-16.
+ * ## The two halves come from design now
+ *
+ * `drawnClasses()` and `emittedClasses()` were three character-identical
+ * copies - here, in bildquelle and in stimmquelle - and all three said in
+ * their header that they belonged in design beside the file they read, the day
+ * a release could carry them there. design 1.33.1 is that release, and
+ * `@lautstark/design/css` is where they live.
+ *
+ * Taking them from there rather than keeping the local pair is not tidiness.
+ * A Svelte component with a `<style>` block puts its scoping hash into
+ * `classList` beside the real names - measured: `["panel", "svelte-1fnslke",
+ * "section", "state", "body"]` - and design's `emittedClasses` skips
+ * `/^svelte-[0-9a-z]+$/`. A local walk would fail every styled component in
+ * `svelte/` and report a hash as the missing class, which is a message nobody
+ * can act on. None of the components here styles itself today; the day one
+ * does, this file is already right.
+ *
+ * ## The exceptions are gone, which is the guard having worked
+ *
+ * This file carried a `KNOWN_MISSING` map — `small`, `muted` and `faint`, the
+ * three typographic utilities both panels put on their text and no stylesheet
+ * in the family drew — and a test beside it asserting those three were *still*
+ * undrawn, so that the entry would go the day the rule landed rather than
+ * outliving it. components.css draws all three as of design 1.32, the bump to
+ * 1.33.1 made that test fail, and the map and the test went with it.
+ *
+ * A later exception comes back the same way: an entry with a date and a reason,
+ * and the guard that fails the day it stops being one. Nothing is tolerated
+ * here without both.
+ *
+ * ## The Svelte twins are held to the same contract
+ *
+ * `svelte/BackupPanel.svelte` and `svelte/AblagePanel.svelte` emit what the
+ * vanilla panels emit, and `svelte/Rescue.svelte` is new markup in this
+ * package - conventions.md §6.7 and §6.8. All three are mounted here in every
+ * state they draw, because "same emitted markup" is a claim and this is the
+ * only thing in the family that checks it.
  */
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-
-/** Every class name that has a rule in components.css. */
-function drawnClasses(): Set<string> {
-  const path = createRequire(import.meta.url).resolve('@lautstark/design/components.css');
-  const css = readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
-  const drawn = new Set<string>();
-  // The text before each `{` is a selector list (or an at-rule prelude, which
-  // holds no class). Declarations never reach this: they sit after the brace.
-  for (const [, prelude] of css.matchAll(/([^{};]+)\{/g)) {
-    for (const [, name] of prelude.matchAll(/\.([A-Za-z_][\w-]*)/g)) drawn.add(name);
-  }
-  return drawn;
-}
-
-/** Every class token on a node and everything under it. */
-function emittedClasses(root: Element): Set<string> {
-  const names = new Set<string>();
-  for (const el of [root, ...root.querySelectorAll('*')]) {
-    for (const name of el.classList) names.add(name);
-  }
-  return names;
-}
-
-// @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest';
+import { drawnClasses, emittedClasses } from '@lautstark/design/css';
+import { flushSync, mount, unmount } from 'svelte';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeTree } from './folder.js';
 import { backupPanel } from '../src/backup-panel.js';
 import type { Sicherung } from '../src/index.js';
-import type { Status } from '../src/types.js';
+import type { AblageStatus, Status } from '../src/types.js';
+import AblagePanel from '../svelte/AblagePanel.svelte';
+import BackupPanel from '../svelte/BackupPanel.svelte';
+import Rescue from '../svelte/Rescue.svelte';
+import { Rescuing, type RescueWords } from '../svelte/rescuing.svelte.js';
 
 const folders = new Map<string, unknown>();
 vi.mock('../src/store.js', () => ({
@@ -69,6 +85,18 @@ const STATUSES: Status[] = [
   { kind: 'failed', folder: 'Sicherungen', reason: 'voll', lastWrite: null },
 ] as Status[];
 
+/** Every state an `Ablage` can be in, which is two more than a `Sicherung`. */
+const ABLAGE_STATUSES: AblageStatus[] = [
+  { kind: 'unsupported' },
+  { kind: 'off' },
+  { kind: 'idle', folder: 'Haushalt' },
+  { kind: 'saving', folder: 'Haushalt' },
+  { kind: 'needs-permission', folder: 'Haushalt' },
+  { kind: 'failed', folder: 'Haushalt', reason: 'voll' },
+  { kind: 'stale', folder: 'Haushalt', reason: 'nicht erreichbar' },
+  { kind: 'conflicted', folder: 'Haushalt', ids: ['a', 'b'] },
+];
+
 function stubBackup(status: Status): Sicherung {
   return {
     status,
@@ -78,33 +106,69 @@ function stubBackup(status: Status): Sicherung {
   } as unknown as Sicherung;
 }
 
-/* What this test found on the day it was written, and tolerates until the
- * shared layer catches up.
+/**
+ * An `Ablage` that answers a state without a folder behind it.
  *
- * Both panels put `small`, `muted` and `faint` on their text - the three
- * typographic utilities every product had written for itself (bildhaft and
- * wochenwerk in their own stylesheets, identical values; mitreden and
- * vorlaut-editor not at all, so there the hint under the panel renders at
- * body size in body colour). That is the drift §4.12 describes, one level
- * down from the panel itself. The rules belong in components.css and are
- * being added there; this list goes when the design devDependency moves to
- * the release that carries them. Nothing may be added to it without a date
- * and a reason. */
-const KNOWN_MISSING = new Map<string, string>([
-  ['small', '2026-09-16: typographic utility, moving into components.css'],
-  ['muted', '2026-09-16: typographic utility, moving into components.css'],
-  ['faint', '2026-09-16: typographic utility, moving into components.css'],
-]);
+ * The real one is exercised beside it - the vanilla case below still builds a
+ * `FakeTree` - but four of the eight states cannot be reached by picking a
+ * folder in jsdom, and the contract is about the markup rather than about how
+ * the state was arrived at.
+ */
+function stubStore(first: AblageStatus, extra: Record<string, unknown> = {}) {
+  let status = first;
+  let tell: ((next: AblageStatus) => void) | null = null;
+  return {
+    app: 'wochenwerk',
+    get status() { return status; },
+    subscribe(listener: (next: AblageStatus) => void) {
+      tell = listener;
+      listener(status);
+      return () => { tell = null; };
+    },
+    move(next: AblageStatus) { status = next; tell?.(next); },
+    choose: async () => status,
+    confirm: async () => status,
+    forget: async () => status,
+    nest: async () => status,
+    folders: async () => [],
+    adopted: async () => true,
+    ...extra,
+  };
+}
+
+const WORDS: RescueWords = {
+  body: (from) => `Die Datenbank ist bei Version ${from} stehen geblieben.`,
+  holds: (count) => `${count} Einträge`,
+  saved: 'Gespeichert.',
+  discarding: 'Wird gelöscht …',
+  failed: (reason) => `Fehlgeschlagen: ${reason}`,
+  download: 'Als Datei sichern',
+  discard: (from) => `Version ${from} verwerfen`,
+};
+
+/* Every mount is torn down, which is not hygiene here: the components hold
+   their status through an `$effect` returning the unsubscribe, and a test that
+   never unmounts never runs the line §6.8 is about. */
+const live: ReturnType<typeof mount>[] = [];
+afterEach(() => {
+  for (const app of live.splice(0)) void unmount(app);
+  document.body.replaceChildren();
+});
+
+function render(component: unknown, props: Record<string, unknown>): HTMLElement {
+  const target = document.createElement('div');
+  document.body.append(target);
+  live.push(mount(component as Parameters<typeof mount>[0], { target, props }));
+  flushSync();
+  return target;
+}
+
+const settled = () => new Promise((done) => setTimeout(done, 0));
 
 describe('every class name the panels emit is drawn by components.css', () => {
   const drawn = drawnClasses();
   const missingFrom = (node: Element) =>
-    [...emittedClasses(node)].filter((name) => !drawn.has(name) && !KNOWN_MISSING.has(name));
-
-  it('the exceptions are still exceptions', () => {
-    // The day components.css draws one of these, this fails and the entry goes.
-    for (const name of KNOWN_MISSING.keys()) expect(drawn.has(name), name).toBe(false);
-  });
+    [...emittedClasses(node)].filter((name) => !drawn.has(name));
 
   it('components.css was found and has rules', () => {
     expect(drawn.size).toBeGreaterThan(20);
@@ -130,4 +194,58 @@ describe('every class name the panels emit is drawn by components.css', () => {
     });
     expect(missingFrom(panel.node)).toEqual([]);
   });
+
+  it.each(STATUSES.map((s) => [s.kind, s] as const))('svelte/BackupPanel, %s', (kind, status) => {
+    const node = render(BackupPanel, { backup: stubBackup(status), say: () => {} });
+    // The same answer the vanilla function gives by returning null: a browser
+    // with no picker is shown no backup story at all.
+    if (kind === 'unsupported') expect(node.children.length).toBe(0);
+    expect(missingFrom(node)).toEqual([]);
+  });
+
+  it.each(ABLAGE_STATUSES.map((s) => [s.kind, s] as const))('svelte/AblagePanel, %s', (_kind, status) => {
+    const node = render(AblagePanel, {
+      store: stubStore(status), adopt: async () => 'pushed', changed: () => {}, say: () => {},
+    });
+    expect(missingFrom(node)).toEqual([]);
+  });
+
+  it('svelte/AblagePanel, with the consent switch', () => {
+    const node = render(AblagePanel, {
+      store: stubStore({ kind: 'idle', folder: 'Haushalt' }),
+      adopt: async () => 'pushed',
+      changed: () => {},
+      say: () => {},
+      share: { reads: () => false, write: async () => {} },
+    });
+    expect(node.querySelector('.check')).not.toBe(null);
+    expect(missingFrom(node)).toEqual([]);
+  });
+
+  it('svelte/AblagePanel, asking about a folder that holds nothing of ours', async () => {
+    const store = stubStore({ kind: 'off' }, { adopted: async () => false });
+    store.choose = async () => {
+      store.move({ kind: 'idle', folder: 'Haushalt' });
+      return store.status;
+    };
+    const node = render(AblagePanel, {
+      store, adopt: async () => 'pushed', changed: () => {}, say: () => {},
+    });
+    node.querySelector('button')!.click();
+    await settled();
+    flushSync();
+    // The question, with the folder it is about drawn as a tree.
+    expect(node.querySelector('.tree')?.textContent).toContain('Haushalt');
+    expect(missingFrom(node)).toEqual([]);
+  });
+
+  it.each([['before the file is taken', false], ['after it', true]] as const)(
+    'svelte/Rescue, %s', (_name, saved) => {
+      const rescue = new Rescuing(4, 312, WORDS, {
+        save: () => {}, discard: () => {}, again: () => {},
+      });
+      rescue.saved = saved;
+      const node = render(Rescue, { s: rescue });
+      expect(missingFrom(node)).toEqual([]);
+    });
 });
