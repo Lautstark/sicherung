@@ -52,27 +52,38 @@
  * package - conventions.md §6.7 and §6.8. All three are mounted here in every
  * state they draw, because "same emitted markup" is a claim and this is the
  * only thing in the family that checks it.
+ *
+ * ## Everything comes in through `../dist`, as a consumer's does
+ *
+ * Since 2026-09-17 the components import the package's published entries
+ * rather than its `src/` — `test/published-entries.test.ts` has the whole of
+ * why. This file follows for a reason of its own: the vanilla `wherePanel` and
+ * the Svelte `AblagePanel` are compared against each other here, and a vanilla
+ * panel built from `src` beside a component reading `dist` is two copies of
+ * `announceFolder`'s module. They happen to agree today — what it reads is a
+ * cookie — and a contract test that holds two builds of the same module
+ * against each other is answering about an arrangement no consumer has.
  */
 import { drawnClasses, emittedClasses } from '@lautstark/design/css';
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeTree } from './folder.js';
-import { backupPanel } from '../src/backup-panel.js';
-import type { Sicherung } from '../src/index.js';
-import type { AblageStatus, Status } from '../src/types.js';
+import { backupPanel } from '../dist/backup-panel.js';
+import type { Sicherung, Status } from '../dist/index.js';
+import type { AblageStatus } from '../dist/ablage.js';
 import AblagePanel from '../svelte/AblagePanel.svelte';
 import BackupPanel from '../svelte/BackupPanel.svelte';
 import Rescue from '../svelte/Rescue.svelte';
 import { Rescuing, type RescueWords } from '../svelte/rescuing.svelte.js';
 
 const folders = new Map<string, unknown>();
-vi.mock('../src/store.js', () => ({
+vi.mock('../dist/store.js', () => ({
   readFolder: async (key: string) => folders.get(key) ?? null,
   writeFolder: async (key: string, folder: unknown) => { folders.set(key, folder); },
   forgetFolder: async (key: string) => { folders.delete(key); },
 }));
-const { Ablage } = await import('../src/ablage.js');
-const { wherePanel } = await import('../src/ablage-panel.js');
+const { Ablage } = await import('../dist/ablage.js');
+const { wherePanel } = await import('../dist/ablage-panel.js');
 
 const DAY = 24 * 60 * 60 * 1000;
 const STATUSES: Status[] = [

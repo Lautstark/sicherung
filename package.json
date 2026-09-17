@@ -79,6 +79,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json && svelte-check --tsconfig ./tsconfig.svelte.json --threshold warning",
     "test": "vitest run",
+    "gate": "npm run build && npm run typecheck && npm test",
     "prepare": "npm run build"
   },
   "dependencies": {

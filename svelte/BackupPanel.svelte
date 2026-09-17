@@ -31,10 +31,30 @@
    * rather than the one it started with, which is the same answer for a
    * `Sicherung` (an unsupported browser has no other status to be in) and a
    * cheaper one to reason about than a decision taken once at mount.
+   *
+   * ## Everything below comes from `../dist`, and must
+   *
+   * A component imports what a consumer imports. `exports["."]` points at
+   * `dist`, so the `Sicherung` a product is holding is the *built* class, and
+   * `tsc` writes `#private;` into its declaration — which makes the built class
+   * and the source class nominally distinct. A component typed against `../src`
+   * cannot be handed the product's own object: "Type 'Sicherung' is missing the
+   * following properties from type 'Sicherung': #app, #stem, #produce …", with
+   * no honest fix on the consumer's side, because `exports` has no `./src/*`
+   * entry to import the other one from.
+   *
+   * It is not only types. Vite resolves `../src/backup-panel.js` to the
+   * TypeScript beside it and bundles a second copy of that module and of
+   * everything it reaches, alongside the `dist` copy the product already has.
+   *
+   * `WORDS` is the one thing here no consumer holds — nobody names its type —
+   * so by itself it could have stayed in `src`. It comes from `dist` because it
+   * lives in a module whose other exports must, and reaching into `src` for it
+   * alone would buy the duplicate copy back for nothing.
    */
-  import { WORDS, headlineFor, sentenceFor, type PanelLang } from '../src/backup-panel.js';
-  import type { Sicherung, Status } from '../src/index.js';
-  import { actionsFor, needsAttention, type Action } from '../src/ui.js';
+  import { WORDS, headlineFor, sentenceFor, type PanelLang } from '../dist/backup-panel.js';
+  import type { Sicherung, Status } from '../dist/index.js';
+  import { actionsFor, needsAttention, type Action } from '../dist/ui.js';
 
   let {
     backup,

@@ -43,11 +43,19 @@
    * the package may not import design's `Vanilla` to wrap a stray node — §6.0
    * keeps the dependency pointing the other way. So the option keeps its name
    * and its place at the foot of the panel and changes shape.
+   *
+   * ## Everything below comes from `../dist`, and must
+   *
+   * The same rule as `BackupPanel.svelte`, whose header carries the whole of
+   * it: a component imports what a consumer imports, because the `Ablage` a
+   * product holds is the built class and `tsc` brands it `#private;`. One
+   * addition here — `AblageStatus` came from `../src/types.js`, which is not a
+   * published entry at all; `./ablage` re-exports it and that is where a
+   * consumer gets it.
    */
   import type { Snippet } from 'svelte';
-  import { announcedFolder, type Ablage } from '../src/ablage.js';
-  import { WORDS, type PanelLang } from '../src/ablage-panel.js';
-  import type { AblageStatus } from '../src/types.js';
+  import { announcedFolder, type Ablage, type AblageStatus } from '../dist/ablage.js';
+  import { WORDS, type PanelLang } from '../dist/ablage-panel.js';
 
   let {
     store,

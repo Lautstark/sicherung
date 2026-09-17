@@ -22,5 +22,11 @@ jobs:
       pull-requests: write
     uses: Lautstark/.github/.github/workflows/release.yml@main
     with:
-      gate: npm run typecheck && npm test && npm run build
+      # The build runs first, and the order is the point. The components in
+      # `svelte/` import this package's published entries — `../dist/...`, the
+      # same files a consumer gets — so `svelte-check` has nothing to read
+      # until `dist` exists. The build itself is `tsc` over `src` with
+      # `.svelte` excluded, so it does not depend on the components checking.
+      # `npm run gate` keeps that order in one place; package.json has it.
+      gate: npm run gate
     secrets: inherit

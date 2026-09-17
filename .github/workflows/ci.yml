@@ -38,12 +38,17 @@ jobs:
 
       - run: npm ci
 
+      # First, and the order is the point. Consumers install from git, so
+      # `prepare` runs this on their machine — and since the components in
+      # `svelte/` import `../dist/...`, the same files a consumer gets, both
+      # `svelte-check` and the component tests have nothing to read until it
+      # has run here. The build is `tsc` over `src` with `.svelte` excluded,
+      # so it does not itself depend on the components checking.
+      - run: npm run build
+
       - run: npm run typecheck
 
       # "the inlet" in test/sicherung.test.ts asserts the API surface as an
       # allow-list. A failure there is a licensing question — a new way for
       # data to enter this module — not just a broken test.
       - run: npm test
-
-      # Consumers install from git, so `prepare` runs this on their machine.
-      - run: npm run build
