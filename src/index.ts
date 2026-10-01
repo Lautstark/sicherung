@@ -73,6 +73,16 @@ function dayStamp(at: number): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+/** Whether two handles are one folder. Unknown counts as no — see `#take`. */
+async function sameFolder(a: FileSystemDirectoryHandle, b: FileSystemDirectoryHandle): Promise<boolean> {
+  if (a === b) return true;
+  try {
+    return (await (a as Partial<Pick<FileSystemHandle, 'isSameEntry'>>).isSameEntry?.(b)) === true;
+  } catch {
+    return false;
+  }
+}
+
 const reason = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
@@ -171,14 +181,44 @@ export class Sicherung {
       return this.#status;
     }
 
-    this.#folder = folder;
-    await writeFolder(this.#app, folder);
+    await this.#take(folder);
     const { lastWrite } = await readMark(this.#app);
     this.#announce({ kind: 'idle', folder: folder.name, lastWrite });
     // A folder chosen and then not written to until the next edit would look
     // set up while holding nothing. Write immediately so the first copy exists.
     await this.save();
     return this.#status;
+  }
+
+  /*
+   * Takes a folder as the one written to from now on, and starts its mark over
+   * if it is a different folder from the one before.
+   *
+   * The mark is kept per app, not per folder: `lastWrite` is "how old is the
+   * last copy" and `lastDated` is "has today's dated copy been cut". Both are
+   * facts about the folder they were written into. Carried across to a newly
+   * chosen one, the new folder got no dated copy that day — the mark said it
+   * had one — and with an empty export the write was *held*, and the panel told
+   * the person their copy from this morning was still there, quoting the age of
+   * a file in a folder they had just stopped using. The age of the last copy is
+   * the one number this package exists to get right, so a new folder starts
+   * with none: it has no copy until one is written into it.
+   *
+   * Asked of the handles rather than of the names, because two folders called
+   * `Sicherungen` are two folders. `isSameEntry` is in every browser that has
+   * the picker; where it cannot answer, the folder counts as new, which costs a
+   * dated copy rather than a wrong age.
+   *
+   * `#folder` moves before anything is awaited, so a write still running for
+   * the previous folder sees the change and leaves the mark alone.
+   */
+  async #take(folder: FileSystemDirectoryHandle): Promise<void> {
+    const before = await readFolder(this.#app);
+    this.#folder = folder;
+    if (before && !(await sameFolder(before, folder))) {
+      await writeMark(this.#app, { lastWrite: null, lastDated: null });
+    }
+    await writeFolder(this.#app, folder);
   }
 
   /*
@@ -195,8 +235,7 @@ export class Sicherung {
    * the product handing the folder over is the product that picked it.
    */
   async useFolder(folder: FileSystemDirectoryHandle): Promise<Status> {
-    this.#folder = folder;
-    await writeFolder(this.#app, folder);
+    await this.#take(folder);
     const { lastWrite } = await readMark(this.#app);
     this.#announce({ kind: 'idle', folder: folder.name, lastWrite });
     await this.save();

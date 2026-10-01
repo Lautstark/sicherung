@@ -44,7 +44,24 @@ export class FakeFolder {
   #permission: PermissionState = 'granted';
   #granting: PermissionState = 'granted';
 
+  /* Which folder on disk this handle is a handle to. A browser hands back a new
+     handle object for the same folder — every restore, every pick — so object
+     identity is not folder identity, and `isSameEntry` is how one is asked. */
+  #entry: object = {};
+
   constructor(readonly name = 'Sicherungen') {}
+
+  /** Another handle to this same folder, as a second pick of it hands back. */
+  again(): FakeFolder {
+    const twin = new FakeFolder(this.name);
+    twin.#entry = this.#entry;
+    for (const [name, text] of this.files) twin.files.set(name, text);
+    return twin;
+  }
+
+  async isSameEntry(other: unknown): Promise<boolean> {
+    return other instanceof FakeFolder && other.#entry === this.#entry;
+  }
 
   /** Simulates the browser wanting the folder re-confirmed after a restart. */
   decay(onRequest: PermissionState = 'granted'): void {

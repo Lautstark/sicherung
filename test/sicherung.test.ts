@@ -95,6 +95,62 @@ describe('choosing a folder', () => {
   });
 });
 
+/*
+ * The mark is kept per app and describes the folder it was written into. It
+ * used to survive a change of folder: the new one got no dated copy that day,
+ * because the mark said today's had been cut — and with an empty export the
+ * write was held, and the panel said the last copy was from this morning,
+ * quoting a file in the folder the person had just left.
+ */
+describe('choosing a different folder', () => {
+  it('cuts a dated copy in the new folder the same day', async () => {
+    const first = new FakeFolder('A');
+    const second = new FakeFolder('B');
+    const time = clock();
+    const backup = make(first, { now: time.now });
+    await backup.choose();
+    vi.stubGlobal('showDirectoryPicker', pickerFor(second));
+    await backup.choose();
+
+    expect([...second.files.keys()].sort())
+      .toEqual(['testprodukt-2026-08-23.json', 'testprodukt-aktuell.json']);
+  });
+
+  it('does not quote the old folder\'s copy as the new one\'s', async () => {
+    const first = new FakeFolder('A');
+    const second = new FakeFolder('B');
+    let empty = false;
+    const backup = make(first, {
+      produce: async () => ({ sentences: empty ? [] : ['hallo'] }),
+      looksEmpty: () => empty,
+    });
+    await backup.choose();
+    empty = true;
+    /* Nothing in B to lose, so nothing to hold: B gets what there is, and A
+       keeps its copy untouched. */
+    await backup.useFolder(second as unknown as FileSystemDirectoryHandle);
+    expect(backup.status).toMatchObject({ kind: 'idle', folder: 'B' });
+    expect(JSON.parse(second.files.get('testprodukt-aktuell.json')!)).toEqual({ sentences: [] });
+    expect(JSON.parse(first.files.get('testprodukt-aktuell.json')!)).toEqual({ sentences: ['hallo'] });
+  });
+
+  it('keeps the mark for the same folder handed back as a new handle', async () => {
+    const folder = new FakeFolder('A');
+    const time = clock();
+    const backup = make(folder, { now: time.now });
+    await backup.choose();
+    const lastWrite = marks.get('testprodukt')!.lastWrite;
+
+    const twin = folder.again();
+    vi.stubGlobal('showDirectoryPicker', pickerFor(twin));
+    await backup.choose();
+    /* Today's dated copy is already there; only the current one is replaced. */
+    expect(twin.writes).toBe(1);
+    expect(marks.get('testprodukt')!.lastDated).toBe('2026-08-23');
+    expect(lastWrite).not.toBeNull();
+  });
+});
+
 describe('permission decay', () => {
   it('restores into needs-permission, keeping the age of the last real copy', async () => {
     const folder = new FakeFolder();
