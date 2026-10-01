@@ -19,10 +19,13 @@ import type { AblageOptions, AblageStatus, Adoption, Conflict, Change, Listed, S
 
 export type { AblageOptions, AblageStatus, Adoption, Conflict, Change, Listed, Stored, Written };
 
-/** A directory handle, narrowed to what is used here. */
-interface Dir extends FileSystemDirectoryHandle {
+/** A directory handle whose `keys()` may be missing. TypeScript 6's lib.dom
+ *  declares it; a browser without it still exists, and an older lib does not
+ *  know it at all. An intersection rather than `extends`, because an optional
+ *  member cannot extend the required one TypeScript 6 declares. */
+type Dir = FileSystemDirectoryHandle & {
   keys?(): AsyncIterableIterator<string>;
-}
+};
 
 /* A canonical record is `<id>.json`. A sync client that cannot merge writes a
    second file beside the first and decorates the stem — "x (conflicted copy
