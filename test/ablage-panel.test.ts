@@ -203,3 +203,41 @@ describe('the panel where the folder went out of reach', () => {
     expect(panel.node.querySelector('button.primary')?.textContent).toBe('Nochmal versuchen');
   });
 });
+
+/* Dismissing the picker has to cost nothing. `choose` keeps its half of that by
+   answering with the status it already had — which, behind „Anderer Ordner“,
+   is a folder that is set up — so the panel took a dismissal for a pick: the
+   product's `adopt` ran again, the panel said the folder "already held
+   something", and `changed()` redrew the product. */
+describe('a picker somebody closed', () => {
+  const settled = () => new Promise((done) => setTimeout(done, 0));
+
+  it('costs nothing behind „Anderer Ordner“', async () => {
+    const tree = new FakeTree();
+    let answer: FakeTree | null = tree;
+    (globalThis as { showDirectoryPicker?: unknown }).showDirectoryPicker =
+      async () => { if (!answer) throw new Error('AbortError'); return answer; };
+    const store = new Ablage({ app: 'wochenwerk', kinds: KINDS });
+    await store.choose();
+    await store.adopt({ termine: [] });
+    const adopt = vi.fn(async () => 'pulled' as const);
+    const changed = vi.fn();
+    const said: string[] = [];
+    const { node } = panelFor(store, { adopt, changed, say: (line: string) => said.push(line) });
+
+    answer = null;
+    [...node.querySelectorAll('button')].find((b) => b.textContent === 'Anderer Ordner')!.click();
+    await settled();
+    expect(adopt).not.toHaveBeenCalled();
+    expect(changed).not.toHaveBeenCalled();
+    expect(said).toEqual([]);
+    expect(buttons(node)).toEqual(['Anderer Ordner', 'Ordner vergessen']);
+
+    /* And a real pick still goes through: a folder holding nothing of ours
+       is asked about, as it always was. */
+    answer = new FakeTree('Anders');
+    [...node.querySelectorAll('button')].find((b) => b.textContent === 'Anderer Ordner')!.click();
+    await settled();
+    expect(words(node)).toContain('In „Anders“ liegt noch nichts von Lautstark');
+  });
+});

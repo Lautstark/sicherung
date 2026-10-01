@@ -150,8 +150,16 @@
     changed();
   }
 
+  /* Dismissing the picker costs nothing — `choose` answers with the status it
+     already had — so behind „Anderer Ordner“ the status cannot tell a
+     dismissal from a pick, and a dismissal used to run `adopt` again and say
+     „Der Ordner hatte schon etwas“ about nothing. A pick replaces the handle,
+     even with the same folder; an unchanged handle is a picker somebody
+     closed. The vanilla panel carries the same check and the same reason. */
   async function choose(): Promise<void> {
+    const before = store.handle();
     await store.choose();
+    if (store.handle() === before) return;
     const now = store.status;
     if (now.kind === 'off' || now.kind === 'unsupported') return;
     const gathered = (await store.folders())

@@ -141,6 +141,7 @@ function stubStore(first: AblageStatus, extra: Record<string, unknown> = {}) {
     confirm: async () => status,
     forget: async () => status,
     nest: async () => status,
+    handle: (): object | null => null,
     folders: async () => [],
     adopted: async () => true,
     ...extra,
@@ -235,7 +236,10 @@ describe('every class name the panels emit is drawn by components.css', () => {
 
   it('svelte/AblagePanel, asking about a folder that holds nothing of ours', async () => {
     const store = stubStore({ kind: 'off' }, { adopted: async () => false });
+    const picked = {};
     store.choose = async () => {
+      /* A pick is a new handle; the panel goes by that, not by the status. */
+      store.handle = () => picked;
       store.move({ kind: 'idle', folder: 'Haushalt' });
       return store.status;
     };

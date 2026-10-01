@@ -201,8 +201,19 @@ export function wherePanel(options: PanelOptions): Panel {
     options.changed();
   };
 
+  /* Dismissing the picker has to cost nothing, and `choose` keeps that promise
+     by answering with the status it already had — which, behind „Anderer
+     Ordner“, is a folder that is set up. So "is there a folder now" could not
+     tell a dismissal from a pick, and a dismissal went on into `settle`: the
+     product's `adopt` ran again over the folder it already had, the panel said
+     „Der Ordner hatte schon etwas — das gilt jetzt hier“ about nothing, and
+     `changed()` redrew the product. The handle is what a pick replaces — a
+     fresh one even for the same folder — so an unchanged handle is a picker
+     somebody closed. */
   const choose = async () => {
+    const before = options.store.handle();
     await options.store.choose();
+    if (options.store.handle() === before) return;
     const status = options.store.status;
     if (status.kind === 'off' || status.kind === 'unsupported') return;
     const gathered = (await options.store.folders())
