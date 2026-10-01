@@ -142,6 +142,11 @@ export function wherePanel(options: PanelOptions): Panel {
   const home = options.home ?? 'Lautstark';
   const siblings = options.siblings ?? ['bildhaft', 'wochenwerk', 'mitreden', 'vorlaut'];
   const node = make('div', 'where-panel');
+  /* A follower borrows another product's folder and throws on `choose`,
+     `forget` and `nest`, because which folder is that product's question. The
+     panel offers none of them: what it can do is put a withdrawn permission
+     back and try again, and choosing happens in the leader's panel. */
+  const following = options.store.follows !== undefined;
 
   /* The name of a folder somebody just picked that holds nothing of ours yet.
      It lives across renders because the question is asked in the panel rather
@@ -183,14 +188,24 @@ export function wherePanel(options: PanelOptions): Panel {
     }
   };
 
+  /* The `catch` is not tidiness. `finally` hands back a promise that rejects
+     with whatever the job threw, and `void` drops it, so every throw here — a
+     follower's `forget`, a product's `adopt` — was an unhandled rejection, which
+     some hosts report as a crash and none of them can attribute to a press.
+     There is nowhere in the panel to say it: the words are a household's, and
+     a stack trace is not one of them. So it goes to the console, where whoever
+     wired the panel will look, and the panel unlocks and redraws as it would
+     have anyway. */
   const press = (job: () => Promise<unknown>) => (): void => {
     if (working) return;
     working = true;
     shut();
-    void job().finally(() => {
-      working = false;
-      refresh();
-    });
+    void job()
+      .catch((error: unknown) => { console.error(error); })
+      .finally(() => {
+        working = false;
+        refresh();
+      });
   };
 
   const settle = async (nest: boolean) => {
@@ -274,7 +289,7 @@ export function wherePanel(options: PanelOptions): Panel {
       add(
         make('p', 'small muted', `${say.offer} ${say.noneYet}`),
         make('p', 'small muted', other ? say.elsewhere(other.app, other.folder) : say.same),
-        acts(button(say.pick, '', press(choose))),
+        following ? null : acts(button(say.pick, '', press(choose))),
       );
     } else {
       add(state(
@@ -287,11 +302,13 @@ export function wherePanel(options: PanelOptions): Panel {
       }
       if (options.share) add(sharing());
       add(acts(
-        stale ? button(say.retry, 'primary', press(choose)) : null,
+        /* Trying again is pointing at the folder again — for a follower, the
+           folder it was lent, which is asking for it rather than picking it. */
+        stale ? button(say.retry, 'primary', press(following ? () => options.store.confirm() : choose)) : null,
         status.kind === 'needs-permission'
           ? button(say.allow, 'primary', press(() => options.store.confirm())) : null,
-        button(say.another, 'quiet', press(choose)),
-        button(say.forget, 'destructive', press(() => options.store.forget())),
+        following ? null : button(say.another, 'quiet', press(choose)),
+        following ? null : button(say.forget, 'destructive', press(() => options.store.forget())),
       ));
     }
 

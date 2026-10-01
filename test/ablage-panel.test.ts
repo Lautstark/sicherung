@@ -241,3 +241,68 @@ describe('a picker somebody closed', () => {
     expect(words(node)).toContain('In „Anders“ liegt noch nichts von Lautstark');
   });
 });
+
+describe('a panel for a follower', () => {
+  const follower = async () => {
+    const tree = new FakeTree();
+    (globalThis as { showDirectoryPicker?: unknown }).showDirectoryPicker = async () => tree;
+    await new Ablage({ app: 'bildhaft', kinds: ['k'] }).choose();
+    const store = new Ablage({ app: 'wortschatz', follows: 'bildhaft', kinds: ['k'] });
+    await store.restore();
+    return { tree, store };
+  };
+
+  /* Both throw for a follower — which folder is the leader's question — so a
+     button for either was a button that could only fail. */
+  it('offers neither a different folder nor forgetting it', async () => {
+    const { store } = await follower();
+    const { node } = panelFor(store);
+    expect(words(node)).toContain('Im Ordner „Haushalt“');
+    expect(buttons(node)).toEqual([]);
+  });
+
+  it('offers nothing to pick while the leader has chosen nothing', () => {
+    (globalThis as { showDirectoryPicker?: unknown }).showDirectoryPicker = async () => new FakeTree();
+    const { node } = panelFor(new Ablage({ app: 'wortschatz', follows: 'bildhaft', kinds: ['k'] }));
+    expect(buttons(node)).toEqual([]);
+  });
+
+  it('tries again by asking for the folder it was lent, not by picking one', async () => {
+    const { tree, store } = await follower();
+    tree.dirs.set('wortschatz', Object.assign(new FakeTree('wortschatz'), {
+      getDirectoryHandle: async () => { throw new Error('locked'); },
+    }));
+    await store.write('k', { id: '11111111-1111-4111-8111-111111111111', updatedAt: 1 });
+    expect(store.status.kind).toBe('stale');
+    const confirm = vi.spyOn(store, 'confirm');
+    const { node } = panelFor(store);
+    expect(buttons(node)).toEqual(['Nochmal versuchen']);
+    node.querySelector('button')!.click();
+    await new Promise((done) => setTimeout(done, 0));
+    expect(confirm).toHaveBeenCalledTimes(1);
+  });
+});
+
+/* `void job().finally(...)` hands back a promise that rejects with whatever the
+   job threw, and nothing held it: every throw behind a button was an unhandled
+   rejection nobody could trace to a press. */
+describe('a press whose work throws', () => {
+  it('is caught, said to the console, and leaves the panel usable', async () => {
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const store = make(new FakeTree('Dropbox'));
+      const { node } = panelFor(store, { adopt: async () => { throw new Error('adopt broke'); } });
+      [...node.querySelectorAll('button')].find((b) => b.textContent === 'Ordner wählen …')!.click();
+      await new Promise((done) => setTimeout(done, 0));
+      [...node.querySelectorAll('button')].find((b) => b.textContent === '„Dropbox“ direkt benutzen')!.click();
+      await new Promise((done) => setTimeout(done, 10));
+      expect(unhandled).not.toHaveBeenCalled();
+      expect(logged).toHaveBeenCalledWith(expect.objectContaining({ message: 'adopt broke' }));
+      expect([...node.querySelectorAll('button')].some((b) => b.disabled)).toBe(false);
+    } finally {
+      process.off('unhandledRejection', unhandled);
+    }
+  });
+});

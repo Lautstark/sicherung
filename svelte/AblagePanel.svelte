@@ -132,13 +132,21 @@
      whenever the state changes, as the vanilla panel reads it on every draw:
      it is a cookie, and nothing here is told when one is written. */
   const other = $derived(held ? null : announcedFolder());
+  /* A follower borrows the leader's folder and throws on `choose`, `forget`
+     and `nest`; none of them is offered. The vanilla panel says why. */
+  const following = $derived(store.follows !== undefined);
   const sibling = $derived(siblings.find((name) => name !== store.app) ?? 'wochenwerk');
 
+  /* The `catch` keeps a throw — a follower's `forget`, a product's `adopt` —
+     from becoming an unhandled rejection that nobody can trace to a press. The
+     vanilla panel's `press` says why it goes to the console. */
   function press(job: () => Promise<unknown>): () => void {
     return () => {
       if (working) return;
       working = true;
-      void job().finally(() => { working = false; });
+      void job()
+        .catch((error: unknown) => { console.error(error); })
+        .finally(() => { working = false; });
     };
   }
 
@@ -212,10 +220,12 @@
     -->
     <p class="small muted">{words.offer} {words.noneYet}</p>
     <p class="small muted">{other ? words.elsewhere(other.app, other.folder) : words.same}</p>
-    <div class="acts">
-      <button type="button" class="btn sm" disabled={working}
-        onclick={press(choose)}>{words.pick}</button>
-    </div>
+    {#if !following}
+      <div class="acts">
+        <button type="button" class="btn sm" disabled={working}
+          onclick={press(choose)}>{words.pick}</button>
+      </div>
+    {/if}
   {:else}
     <div class="where{stale ? ' bad' : ''}">
       <b>{stale ? words.unreachable : words.folder(named)}</b><span class="small faint"
@@ -242,16 +252,18 @@
     <div class="acts">
       {#if stale}
         <button type="button" class="btn sm primary" disabled={working}
-          onclick={press(choose)}>{words.retry}</button>
+          onclick={press(following ? () => store.confirm() : choose)}>{words.retry}</button>
       {/if}
       {#if status.kind === 'needs-permission'}
         <button type="button" class="btn sm primary" disabled={working}
           onclick={press(() => store.confirm())}>{words.allow}</button>
       {/if}
-      <button type="button" class="btn sm quiet" disabled={working}
-        onclick={press(choose)}>{words.another}</button>
-      <button type="button" class="btn sm destructive" disabled={working}
-        onclick={press(() => store.forget())}>{words.forget}</button>
+      {#if !following}
+        <button type="button" class="btn sm quiet" disabled={working}
+          onclick={press(choose)}>{words.another}</button>
+        <button type="button" class="btn sm destructive" disabled={working}
+          onclick={press(() => store.forget())}>{words.forget}</button>
+      {/if}
     </div>
   {/if}
   <!-- The product's own extras, at the foot — but not under the one question
