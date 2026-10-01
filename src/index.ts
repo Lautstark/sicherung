@@ -83,6 +83,9 @@ async function sameFolder(a: FileSystemDirectoryHandle, b: FileSystemDirectoryHa
   }
 }
 
+/** A string as a regular expression that matches exactly it. */
+const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const reason = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
@@ -422,7 +425,12 @@ export class Sicherung {
 
   /** Keeps the newest `keep` dated copies and removes the rest. */
   async #prune(folder: FileSystemDirectoryHandle): Promise<void> {
-    const dated = new RegExp(`^${this.#stem}-(\\d{4}-\\d{2}-\\d{2})\\.json$`);
+    /* The stem is escaped because it is a name, not a pattern. Unescaped,
+       `vorlaut+editor` read as "one or more t" and matched none of its own
+       files, so its dated copies were never pruned and grew by one a day for
+       as long as the folder lived. And a `.` matches any character, so a
+       stem carrying one could prune files that were never its own. */
+    const dated = new RegExp(`^${escaped(this.#stem)}-(\\d{4}-\\d{2}-\\d{2})\\.json$`);
     const names: string[] = [];
     // Iterating a directory is the one place a folder can hold thousands of
     // unrelated files, so the match is anchored and the stem is ours.

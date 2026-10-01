@@ -234,6 +234,28 @@ describe('writing', () => {
     ]);
   });
 
+  /* The stem went into the pattern unescaped: `vorlaut+editor` read as "one or
+     more t", matched none of its own copies, and they piled up one a day. */
+  it('prunes a stem that carries pattern characters, and only its own files', async () => {
+    const folder = new FakeFolder();
+    folder.files.set('vorlautXeditor-2026-01-01.json', '{}');
+    const time = clock();
+    vi.stubGlobal('showDirectoryPicker', pickerFor(folder));
+    const backup = new Sicherung({
+      app: 'testprodukt', stem: 'vorlaut+editor', keep: 2, settle: 0, now: time.now,
+      produce: async () => ({}),
+    });
+    await backup.choose();
+    for (let day = 0; day < 3; day++) { time.advanceDays(1); await backup.save(); }
+
+    const dated = [...folder.files.keys()].filter((n) => /\d{4}-\d{2}-\d{2}/.test(n)).sort();
+    expect(dated).toEqual([
+      'vorlaut+editor-2026-08-25.json',
+      'vorlaut+editor-2026-08-26.json',
+      'vorlautXeditor-2026-01-01.json',
+    ]);
+  });
+
   it('leaves the previous file whole when producing the payload throws', async () => {
     const folder = new FakeFolder();
     const backup = make(folder);
