@@ -159,6 +159,82 @@ describe('noticing a change', () => {
     expect(await store.poll()).toEqual([{ kind: 'termine', id: A, what: 'went' }]);
   });
 
+  /* The listing used to answer an unreachable folder with no records, and poll
+     turned no records into every record having gone — with the status still
+     idle. A product following adr/0001 then empties its mirror to match a
+     folder that is whole. */
+  it('reports nothing, and says stale, when the folder cannot be reached', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('termine', record(A));
+    await store.write('termine', record(B));
+    await store.poll();
+
+    const reach = tree.getDirectoryHandle.bind(tree);
+    tree.getDirectoryHandle = async () => { throw new Error('The request is not allowed'); };
+    expect(await store.poll()).toEqual([]);
+    expect(store.status).toMatchObject({ kind: 'stale', reason: 'The request is not allowed' });
+    expect(await store.list('termine')).toEqual([]);
+    expect(await store.all('termine')).toEqual([]);
+    expect(store.status.kind).toBe('stale');
+
+    /* What was seen is kept, so the folder coming back is not news either. */
+    tree.getDirectoryHandle = reach;
+    expect(await store.poll()).toEqual([]);
+  });
+
+  it('says stale rather than throwing when a listing breaks off', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('termine', record(A));
+    await store.poll();
+    tree.at('wochenwerk/termine')!.keys = async function* () { throw new Error('NotReadableError'); };
+    expect(await store.poll()).toEqual([]);
+    expect(store.status).toMatchObject({ kind: 'stale', reason: 'NotReadableError' });
+  });
+
+  /* "Not there" is still told apart from "cannot get there": a kind nobody has
+     written to is empty, honestly, and the chosen folder having gone is not. */
+  it('reads a kind never written to as empty, and a vanished folder as stale', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    expect(await store.list('karten')).toEqual([]);
+    expect(store.status.kind).toBe('idle');
+
+    tree.keys = async function* () { throw Object.assign(new Error('gone'), { name: 'NotFoundError' }); };
+    expect(await store.list('karten')).toEqual([]);
+    expect(store.status.kind).toBe('stale');
+  });
+
+  it('keeps a watch from rejecting into nowhere', async () => {
+    vi.useFakeTimers();
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    try {
+      const tree = new FakeTree();
+      const store = make(tree);
+      await store.choose();
+      await store.write('termine', record(A));
+      const spy = vi.spyOn(store, 'poll').mockRejectedValue(new Error('broke'));
+      const onChange = vi.fn();
+      store.watch(10, onChange);
+      await vi.advanceTimersByTimeAsync(25);
+      store.unwatch();
+      spy.mockRestore();
+      vi.useRealTimers();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(unhandled).not.toHaveBeenCalled();
+      expect(onChange).not.toHaveBeenCalled();
+      expect(store.status).toMatchObject({ kind: 'stale', reason: 'broke' });
+    } finally {
+      vi.useRealTimers();
+      process.off('unhandledRejection', unhandled);
+    }
+  });
+
   it('says nothing when nothing moved', async () => {
     const tree = new FakeTree();
     const store = make(tree);

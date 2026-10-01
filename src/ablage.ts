@@ -96,6 +96,14 @@ export function announcedFolder(): { app: string; folder: string } | null {
   return app && folder ? { app, folder } : null;
 }
 
+/* The one failure that means "not there" rather than "cannot get there". Every
+   other error — no permission, a lock, a disk that went — is the second. */
+const missing = (error: unknown): boolean =>
+  (error as { name?: unknown } | null)?.name === 'NotFoundError';
+
+const why = (error: unknown, otherwise: string): string =>
+  (error as Error | null)?.message || otherwise;
+
 const ANY_ID = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
 
 export class Ablage {
@@ -268,14 +276,54 @@ export class Ablage {
     }
   }
 
-  /** The folder for one kind of record, made if it is not there yet. */
+  /** The folder for one kind of record, made if it is not there yet.
+   *
+   *  `null` where there is no folder, where the kind has never been written —
+   *  and where the folder could not be reached, which is said as `stale` here,
+   *  so every reader that gets nothing back has a status that says why. */
   async #dir(kind: string, create = false): Promise<Dir | null> {
     if (!this.#folder) return null;
     if (!this.#options.kinds.includes(kind)) throw new Error(`unknown kind: ${kind}`);
     try {
-      const app = await this.#folder.getDirectoryHandle(this.#options.app, { create });
-      return (await (app as Dir).getDirectoryHandle(kind, { create })) as Dir;
-    } catch {
+      return await this.#reach(kind, create);
+    } catch (error) {
+      this.#gone(why(error, 'the folder could not be opened'));
+      return null;
+    }
+  }
+
+  /* The kind's folder, `null` if it is genuinely not there, and a throw if it
+   * could not be reached.
+   *
+   * This used to be one `catch` that answered `null` to everything, and `null`
+   * reads as *empty*. A folder the browser lost permission to, a disk that was
+   * unplugged, a sync client holding a lock — each listed as no records, and
+   * `poll` turned no records into every record having gone, with the status
+   * still `idle`. A product doing what adr/0001 asks of it — the folder is the
+   * truth, the mirror follows — then deleted its mirror to match. The household
+   * would have been shown an empty week for a folder that was whole.
+   *
+   * So the one error that means "not there" is told apart from the rest.
+   * `NotFoundError` for the kind is a kind nothing was written to yet, which is
+   * empty and honestly so. `NotFoundError` for the app's own folder is the
+   * same — unless the chosen folder above it has gone, because a folder that
+   * was moved or deleted answers `NotFoundError` for everything inside it too.
+   * Asking the chosen folder for its first name is what tells those apart. */
+  async #reach(kind: string, create = false): Promise<Dir | null> {
+    const root = this.#folder;
+    if (!root) return null;
+    let app: Dir;
+    try {
+      app = (await root.getDirectoryHandle(this.#options.app, { create })) as Dir;
+    } catch (error) {
+      if (!missing(error)) throw error;
+      await root.keys?.().next();
+      return null;
+    }
+    try {
+      return (await app.getDirectoryHandle(kind, { create })) as Dir;
+    } catch (error) {
+      if (!missing(error)) throw error;
       return null;
     }
   }
@@ -307,19 +355,33 @@ export class Ablage {
     }
   }
 
-  /** What is in one kind: each record's id and stamp, and nothing else. */
+  /** What is in one kind: each record's id and stamp, and nothing else.
+   *  Empty where the folder could not be reached, with the status `stale`. */
   async list(kind: string): Promise<Listed[]> {
-    const dir = await this.#dir(kind);
-    if (!dir) return [];
-    const found: Listed[] = [];
-    for (const name of await this.#names(dir)) {
-      const canonical = CANONICAL.exec(name);
-      if (!canonical) continue;
-      const text = await this.#text(dir, name);
-      const record = text && this.#parse(text);
-      if (record) found.push({ id: canonical[1], updatedAt: Number(record.updatedAt) || 0 });
+    if (!this.#options.kinds.includes(kind)) throw new Error(`unknown kind: ${kind}`);
+    return (await this.#listed(kind)) ?? [];
+  }
+
+  /* `list`, with "could not reach" kept apart from "nothing there": `null` is
+     the first, and `stale` has been said by the time it is returned. `poll`
+     needs the difference, because an empty list is a list of what went. */
+  async #listed(kind: string): Promise<Listed[] | null> {
+    try {
+      const dir = await this.#reach(kind);
+      if (!dir) return [];
+      const found: Listed[] = [];
+      for (const name of await this.#names(dir)) {
+        const canonical = CANONICAL.exec(name);
+        if (!canonical) continue;
+        const text = await this.#text(dir, name);
+        const record = text && this.#parse(text);
+        if (record) found.push({ id: canonical[1], updatedAt: Number(record.updatedAt) || 0 });
+      }
+      return found;
+    } catch (error) {
+      this.#gone(why(error, 'the folder could not be read'));
+      return null;
     }
-    return found;
   }
 
   async read(kind: string, id: string): Promise<Stored | null> {
@@ -329,16 +391,25 @@ export class Ablage {
     return text ? this.#parse(text) : null;
   }
 
-  /** The startup read the product replaces its mirror from. */
+  /** The startup read the product replaces its mirror from.
+   *
+   *  Empty where the folder could not be reached — and then the status is
+   *  `stale`, which is the product's cue to keep its mirror rather than replace
+   *  it with nothing. An empty array alone cannot say which it is. */
   async all(kind: string): Promise<Stored[]> {
     const dir = await this.#dir(kind);
     if (!dir) return [];
     const records: Stored[] = [];
-    for (const name of await this.#names(dir)) {
-      if (!CANONICAL.test(name)) continue;
-      const text = await this.#text(dir, name);
-      const record = text && this.#parse(text);
-      if (record) records.push(record);
+    try {
+      for (const name of await this.#names(dir)) {
+        if (!CANONICAL.test(name)) continue;
+        const text = await this.#text(dir, name);
+        const record = text && this.#parse(text);
+        if (record) records.push(record);
+      }
+    } catch (error) {
+      this.#gone(why(error, 'the folder could not be read'));
+      return [];
     }
     return records;
   }
@@ -368,7 +439,7 @@ export class Ablage {
     if (!record?.id) throw new Error('a record needs an id');
     if (this.#status.kind === 'stale') return this.#status;
     const dir = await this.#dir(kind, true);
-    if (!dir) return this.#gone('the folder could not be opened');
+    if (!dir) return this.#unopened();
     try {
       /* `v` last, so it reads at the foot of the file rather than above the
          record's own fields — this is a file a person opens when something has
@@ -396,6 +467,13 @@ export class Ablage {
     } catch (error) {
       return this.#gone((error as Error)?.message ?? 'the delete failed');
     }
+  }
+
+  /* No folder to write into. Where `#dir` could not reach it, it has already
+     said `stale` with the browser's own reason, and that is the better
+     sentence; otherwise there was no folder at all. */
+  #unopened(): AblageStatus {
+    return this.#status.kind === 'stale' ? this.#status : this.#gone('the folder could not be opened');
   }
 
   #ok(): AblageStatus {
@@ -597,7 +675,7 @@ export class Ablage {
   async writeFile(kind: string, id: string, blob: Blob): Promise<AblageStatus> {
     if (this.#status.kind === 'stale') return this.#status;
     const dir = await this.#dir(kind, true);
-    if (!dir) return this.#gone('the folder could not be opened');
+    if (!dir) return this.#unopened();
     try {
       const old = await this.#fileFor(dir, id);
       const name = `${id}.${endingFor(blob.type)}`;
@@ -638,7 +716,14 @@ export class Ablage {
     const changes: Change[] = [];
     const now = new Map<string, number>();
     for (const kind of this.#options.kinds) {
-      for (const { id, updatedAt } of await this.list(kind)) {
+      /* A kind that could not be reached is not a kind that emptied. Reporting
+         nothing — and keeping what was seen, so the next look that does reach
+         it compares against the last one that did — is the only answer that
+         cannot make a product delete records the folder still holds. The
+         status says `stale`, which is where the product learns of it. */
+      const listed = await this.#listed(kind);
+      if (!listed) return [];
+      for (const { id, updatedAt } of listed) {
         const key = `${kind}/${id}`;
         now.set(key, updatedAt);
         const before = this.#seen.get(key);
@@ -658,8 +743,17 @@ export class Ablage {
   /** A timer over `poll`, stopped by `forget()` or `unwatch()`. */
   watch(every: number, onChange: (changes: Change[]) => void): () => void {
     this.unwatch();
+    /* `poll` answers an unreachable folder with a status rather than a throw,
+       but a timer is the one caller with nobody awaiting it: anything that does
+       get through would be an unhandled rejection every few seconds, forever.
+       It goes where the rest of this class's trouble goes — into the status.
+       Only `poll`'s own failures, though: a product whose `onChange` throws has
+       a bug of its own, and hiding it here would hide it from them. */
     this.#timer = setInterval(() => {
-      void this.poll().then((changes) => { if (changes.length) onChange(changes); });
+      void this.poll().then(
+        (changes) => { if (changes.length) onChange(changes); },
+        (error: unknown) => { this.#gone(why(error, 'the folder could not be read')); },
+      );
     }, every);
     return () => this.unwatch();
   }
@@ -697,7 +791,7 @@ export class Ablage {
   /** Keep one of a conflict's files and drop the others. The person chose. */
   async resolve(kind: string, id: string, filename: string): Promise<AblageStatus> {
     const dir = await this.#dir(kind);
-    if (!dir) return this.#gone('the folder could not be opened');
+    if (!dir) return this.#unopened();
     const text = await this.#text(dir, filename);
     const record = text && this.#parse(text);
     if (!record) return this.#gone(`could not read ${filename}`);

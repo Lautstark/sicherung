@@ -90,6 +90,13 @@ export function pickerFor(folder: FakeFolder | null): () => Promise<unknown> {
   };
 }
 
+/* What a browser throws for a name that is not there. The name is what the
+   package goes by — `NotFoundError` is "not there", anything else is "cannot
+   get there" — so a fake that threw a plain Error would be testing a browser
+   nobody has. */
+const notFound = (what: string): Error =>
+  Object.assign(new Error(`A requested file or directory could not be found: ${what}`), { name: 'NotFoundError' });
+
 /* A folder with folders in it, and files you can read back.
  *
  * `FakeFolder` above is flat and write-only, which is exactly what `Sicherung`
@@ -122,14 +129,14 @@ export class FakeTree {
   async getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<FakeTree> {
     const there = this.dirs.get(name);
     if (there) return there;
-    if (!options?.create) throw new Error(`no such directory: ${name}`);
+    if (!options?.create) throw notFound(name);
     const made = new FakeTree(name);
     this.dirs.set(name, made);
     return made;
   }
 
   async getFileHandle(name: string, options?: { create?: boolean }) {
-    if (!this.files.has(name) && !options?.create) throw new Error(`no such file: ${name}`);
+    if (!this.files.has(name) && !options?.create) throw notFound(name);
     return {
       getFile: async () => ({
         text: async () => this.files.get(name) ?? '',
