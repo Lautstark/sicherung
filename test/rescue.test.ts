@@ -80,6 +80,33 @@ describe('the file comes before anything is destroyed', () => {
     expect(s.said).toBe(WORDS.saved);
   });
 
+  /* `going` was documented to shut both buttons and only the discard set it,
+     so the download stayed pressable while the file was being built: a second
+     press was a second download of the same frightened database. */
+  it('takes the file once however often it is pressed, and shuts both meanwhile', async () => {
+    let downloads = 0;
+    let finish: () => void = () => {};
+    const s = new Rescuing(4, 1, WORDS, {
+      ...nothing,
+      save: () => new Promise<void>((done) => { downloads += 1; finish = done; }),
+    });
+    const [download, discard] = buttons(render(RescueFoot, s));
+
+    download!.click();
+    download!.click();
+    flushSync();
+    expect(downloads).toBe(1);
+    expect(download!.disabled).toBe(true);
+    expect(discard!.disabled).toBe(true);
+
+    finish();
+    await new Promise((done) => setTimeout(done, 0));
+    flushSync();
+    expect(s.saved).toBe(true);
+    expect(download!.disabled).toBe(false);
+    expect(discard!.disabled).toBe(false);
+  });
+
   it('leaves it shut where the download refused', async () => {
     const s = new Rescuing(4, 1, WORDS, {
       ...nothing,

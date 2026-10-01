@@ -126,7 +126,19 @@ export class Rescuing {
     readonly jobs: RescueJobs,
   ) {}
 
+  /*
+   * `going` is set here too, and the early return is what holds it.
+   *
+   * `going` was documented to shut both buttons and only `discard` ever set it,
+   * so while the product was building the file the download button was still
+   * pressable — and a second press is a second download of a database somebody
+   * is already frightened about, landing as `rettung (1).json` beside the
+   * first. The guard is not left to the `disabled` binding alone: a second
+   * click can arrive before the redraw that applies it.
+   */
   async save(): Promise<void> {
+    if (this.going) return;
+    this.going = true;
     try {
       await this.jobs.save();
       this.said = this.words.saved;
@@ -135,10 +147,13 @@ export class Rescuing {
       this.saved = true;
     } catch (failure) {
       this.said = this.words.failed(reason(failure));
+    } finally {
+      this.going = false;
     }
   }
 
   async discard(): Promise<void> {
+    if (this.going) return;
     this.going = true;
     this.said = this.words.discarding;
     try {
