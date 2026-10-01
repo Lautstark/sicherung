@@ -103,6 +103,20 @@ describe('records', () => {
     await expect(store.write('unbekannt', record(A))).rejects.toThrow(/unknown kind/);
   });
 
+  /* Every reader goes by the UUID filename, so `termin-42.json` was written,
+     answered idle, and never read back — and `adopt` stayed `incomplete` for
+     a reason nobody could see. */
+  it('refuses an id it could never find again', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await expect(store.write('termine', record('termin-42'))).rejects.toThrow(/UUID/);
+    await expect(store.writeFile('termine', 'termin-42', new Blob(['x']))).rejects.toThrow(/UUID/);
+    await expect(store.write('termine', record(`${A}/../x`))).rejects.toThrow(/UUID/);
+    expect(tree.at('wochenwerk/termine')?.files.size ?? 0).toBe(0);
+    expect(store.status.kind).toBe('idle');
+  });
+
   it('removes one file and leaves its neighbours', async () => {
     const tree = new FakeTree();
     const store = make(tree);

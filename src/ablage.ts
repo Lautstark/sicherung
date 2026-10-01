@@ -43,6 +43,22 @@ const ENDINGS: Record<string, string> = {
   'image/svg+xml': 'svg', 'audio/wav': 'wav', 'audio/mpeg': 'mp3', 'audio/webm': 'webm',
   'audio/ogg': 'ogg', 'video/mp4': 'mp4', 'application/pdf': 'pdf', 'text/plain': 'txt',
 };
+/* An id this package can find again.
+ *
+ * Everything that reads — `list`, `all`, `poll`, `adopt`'s check — goes by
+ * `CANONICAL`, so a record under any other name was written, answered `idle`,
+ * and was never seen again: not listed, not in the startup read, and `adopt`
+ * stuck at `incomplete` for a reason nobody could see. conventions.md §1.1
+ * already makes identity a `crypto.randomUUID()`, and the two stores whose keys
+ * are not UUIDs hash them into one (adr/0001, "What the move settled"). So a
+ * write that could never be read back is refused where it is made, loudly, as
+ * a missing id already is — it is a wiring mistake, not a state of the folder. */
+const filed = (id: string): void => {
+  if (!CANONICAL.test(`${id}.json`)) {
+    throw new TypeError(`a record's id must be a UUID to be found again, not "${id}"`);
+  }
+};
+
 const endingFor = (type: string) => ENDINGS[type.toLowerCase().split(';')[0].trim()] ?? 'bin';
 
 /* The mark that says this folder is a store. A plain name rather than a dotted
@@ -437,6 +453,7 @@ export class Ablage {
   /** Replace one record. It carries its own id and stamp; neither is minted here. */
   async write(kind: string, record: Stored): Promise<AblageStatus> {
     if (!record?.id) throw new Error('a record needs an id');
+    filed(record.id);
     if (this.#status.kind === 'stale') return this.#status;
     const dir = await this.#dir(kind, true);
     if (!dir) return this.#unopened();
@@ -684,6 +701,7 @@ export class Ablage {
    * Nothing has to write the name down: whatever carries the id and is not the
    * record is the file. Deleting the record deletes it too. */
   async writeFile(kind: string, id: string, blob: Blob): Promise<AblageStatus> {
+    filed(id);
     if (this.#status.kind === 'stale') return this.#status;
     const dir = await this.#dir(kind, true);
     if (!dir) return this.#unopened();
