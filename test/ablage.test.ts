@@ -113,6 +113,31 @@ describe('records', () => {
     expect((await store.list('termine')).map((r) => r.id)).toEqual([B]);
   });
 
+  /* Another device deleted it first. Removing what is already gone used to turn
+     the browser's NotFoundError into `stale`, and stale refuses every write
+     after it — over a record that was exactly where the product wanted it. */
+  it('counts removing a record that is already gone as done', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('termine', record(A));
+    tree.at('wochenwerk/termine')!.files.delete(`${A}.json`);
+
+    expect((await store.remove('termine', A)).kind).toBe('idle');
+    expect((await store.remove('karten', B)).kind).toBe('idle');
+    expect((await store.write('termine', record(B))).kind).toBe('idle');
+    expect(tree.at('wochenwerk/termine')!.files.has(`${B}.json`)).toBe(true);
+  });
+
+  it('still goes stale when a remove fails for any other reason', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('termine', record(A));
+    tree.at('wochenwerk/termine')!.removeEntry = async () => { throw new Error('locked'); };
+    expect(await store.remove('termine', A)).toMatchObject({ kind: 'stale', reason: 'locked' });
+  });
+
   it('reads the files beside one that cannot be parsed', async () => {
     const tree = new FakeTree();
     const store = make(tree);

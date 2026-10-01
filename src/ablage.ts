@@ -455,9 +455,20 @@ export class Ablage {
   async remove(kind: string, id: string): Promise<AblageStatus> {
     if (this.#status.kind === 'stale') return this.#status;
     const dir = await this.#dir(kind);
-    if (!dir) return this.#gone('the folder could not be opened');
+    /* A kind that was never written to holds nothing to remove, which is the
+       state that was asked for; anything else `#dir` has already called stale.
+       (The cast undoes a narrowing from the line above the await: `#dir` can
+       have announced since.) */
+    if (!dir) return this.#folder && (this.#status as AblageStatus).kind !== 'stale' ? this.#ok() : this.#unopened();
     try {
-      await dir.removeEntry(`${id}.json`);
+      /* Already gone is done, not failed. Removing is how a product follows a
+         deletion — often one another device made, so the file has gone by the
+         time this device catches up. Answering that with `stale` refused every
+         write after it until somebody pressed a button, over a record that was
+         exactly where the product wanted it: nowhere. */
+      await dir.removeEntry(`${id}.json`).catch((error: unknown) => {
+        if (!missing(error)) throw error;
+      });
       /* A record's file has no life of its own; leaving it behind would be a
          picture nothing points at, filling a household's folder for years. */
       const file = await this.#fileFor(dir, id);

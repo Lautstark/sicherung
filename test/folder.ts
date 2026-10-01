@@ -164,7 +164,9 @@ export class FakeTree {
     for (const name of [...this.dirs.keys()]) yield { kind: 'directory', name };
     for (const name of [...this.files.keys()]) yield { kind: 'file', name };
   }
-  async removeEntry(name: string): Promise<void> { this.files.delete(name); }
+  async removeEntry(name: string): Promise<void> {
+    if (!this.files.delete(name)) throw notFound(name);
+  }
 
   /** What a sync client does when it cannot merge: a second file beside the first. */
   conflictOn(path: string, name: string, text: string): void {
