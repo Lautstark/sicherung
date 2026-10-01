@@ -113,7 +113,16 @@ export interface Mark {
 /* A folder that is the store rather than a copy of one. The vocabulary is
    `Sicherung`'s wherever the word means the same thing, because @lautstark/design
    styles the state dot by name and a shared word is a shared dot for free. Two
-   kinds are new, and they describe states a backup genuinely cannot be in. */
+   kinds are new, and they describe states a backup genuinely cannot be in.
+
+   Not every kind is announced by `Ablage` today: it says `unsupported`, `off`,
+   `needs-permission`, `idle` and `stale`, and never `saving`, `failed` or
+   `conflicted`. A write that fails is `stale`, because the product's answer is
+   the same — serve the mirror, take no writes. `conflicted` is found by asking
+   `conflicts()` and is not yet a status: announcing it from a read would have
+   any later write's `idle` paint over it, and that needs a design rather than a
+   line. The three stay in the union because consumers switch over it, and
+   panels already draw them. */
 export type AblageStatus =
   | { kind: 'unsupported' }
   | { kind: 'off' }

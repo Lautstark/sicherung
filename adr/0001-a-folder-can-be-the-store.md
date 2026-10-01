@@ -123,8 +123,10 @@ Concretely:
   `Sicherung.prototype`, so the allow-list test is untouched and still means
   what it means. No new `Status` kind, so bildhaft's `headline()` still
   compiles. No new `Line` key and no new `Action['id']`, so all three products
-  compile unchanged. `Options` gains one optional field, `into` (below), and
-  optional fields break nobody. This is a minor.
+  compile unchanged. This is a minor. (`Options` was to gain one optional
+  field, `into`, for where the dated copies go beside a store. It was never
+  built: `Sicherung.useFolder` answered the same question, and the copies sit
+  flat in the chosen folder — see "What the move settled".)
 
 ### The surface, in prose
 
@@ -217,15 +219,21 @@ they are read by the household.
   wochenwerk/            one folder per app, named by Options.app
     termine/             one folder per kind of record
       3f9c….json         one record, named by its id
-    ablage.json          what wrote here, when, and to which schema
-  sicherungen/           dated exports, if a Sicherung runs beside it
+    adopted.json         the mark: this folder is a store, and since when
+  wochenwerk-aktuell.json      dated exports, flat, if a Sicherung runs beside
+  wochenwerk-2026-09-02.json   it and was handed this folder by useFolder
   METACOM/               the household's own. Ours never creates or reads it.
 ```
 
+(As built. This tree first showed a `sicherungen/` subfolder for the dated
+exports and an `ablage.json` manifest; neither exists. The mark `adopt()`
+writes is `adopted.json` — see "What the first migration taught" — and it
+carries the app and a time, and still counts nothing.)
+
 Namespacing by `app` is what lets two products share one chosen folder without
 either walking the other's records, and it is what leaves room at the top of the
-tree for something that is not ours. `ablage.json` names the app, the schema
-version and the last write. **It carries no count and no listing of what is in
+tree for something that is not ours. The mark names the app and when the
+folder became a store. **It carries no count and no listing of what is in
 the folder**, and that is deliberate: whether a count would be "a count of a
 licensed collection" under §2.3 depends on what the consuming product happens to
 store, and a manifest whose safety depends on its consumer is a manifest that
@@ -279,11 +287,12 @@ audited export, and the file it writes is a copy nothing ever reads back except
 a person restoring by hand. A copy is not a second source, so this does not
 violate the rule above.
 
-The one thing it needs is somewhere to go that is not the middle of the store,
-which is `Options.into` — an optional subfolder name, created on demand,
-defaulting to the folder's root so that the three products' behaviour is
-byte-identical. That is an option and not a method, so the allow-list test is
-untouched.
+The one thing it needs is somewhere to go that is not the middle of the store.
+This proposed `Options.into`, an optional subfolder name; it was not built. The
+store lives one level down, in `<folder>/<app>/`, so the dated copies were
+never in the middle of it: `Sicherung.useFolder` hands the backup the folder
+the store is in, and the copies land flat beside the app's subtree. That is a
+method rather than an option, and it was argued for at the allow-list.
 
 Whether a household on a sync client with version history should turn the dated
 copies off is a real question and it is theirs. The default stays on and the
@@ -323,8 +332,9 @@ index or a cached image — there is nothing here to read them from. Reading
 methods on `Sicherung` would end that sentence for bildhaft, mitreden and
 vorlaut, who need no reader and would carry one anyway. A separate subpath and a
 separate object end it for nobody: `Sicherung`'s prototype is still the same
-nine names, the allow-list test still refuses the tenth, and a product that only
-backs up does not import a line of the reading half. The shape that looks like
+nine names (ten since `useFolder`, which had to be argued for there — the test
+doing exactly this job), the allow-list test still refuses the next one, and a
+product that only backs up does not import a line of the reading half. The shape that looks like
 compromise is the one that preserves the property, and the shape that looks
 cleanest — one class, both directions — is the one that destroys it.
 
@@ -390,7 +400,7 @@ person put on one appointment is that document. A manifest that lists what is in
 the folder, a cache of resolved symbol paths written beside the records, an
 index built once to make the board start faster: each is an enumeration rather
 than a document, each is the kind of thing that gets added for a good reason,
-and each would be the collection leaving. This is why `ablage.json` counts
+and each would be the collection leaving. This is why the mark counts
 nothing and why `Ablage` will not put METACOM inside its own tree. The rule is
 easy to hold in `Sicherung` because there is one inlet; it is not easy to hold
 in a store, and saying so is more use than a reassurance.
