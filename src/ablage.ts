@@ -701,7 +701,17 @@ export class Ablage {
     const text = await this.#text(dir, filename);
     const record = text && this.#parse(text);
     if (!record) return this.#gone(`could not read ${filename}`);
-    await this.write(kind, { ...record, id });
+    /* Only what `write` answers says whether the chosen side is now the record.
+       It answers rather than throws, so ignoring it reads like success: a store
+       already `stale` returns before writing anything, a sync client holding
+       the file makes the write fail — and in both cases the loop below went on
+       to delete every other candidate, including the very file the person had
+       just chosen, and then announced `idle` over it. The person picked which
+       side survives; neither surviving is the one outcome they did not pick.
+       So nothing is removed until the chosen side is in place, and a write
+       that did not land is handed back as the status it is. */
+    const wrote = await this.write(kind, { ...record, id });
+    if (wrote.kind !== 'idle') return wrote;
     for (const name of await this.#names(dir)) {
       if (name === `${id}.json`) continue;
       if ((CANONICAL.exec(name) ?? ANY_ID.exec(name))?.[1] !== id) continue;

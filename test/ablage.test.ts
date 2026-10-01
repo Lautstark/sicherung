@@ -207,6 +207,43 @@ describe('conflicts', () => {
     expect([...tree.at('wochenwerk/termine')!.files.keys()]).toEqual([`${A}.json`]);
   });
 
+  /* `resolve` used to ignore what its own write answered. A store already
+     stale wrote nothing, a write the sync client refused landed nothing, and
+     both went on to delete every other candidate — the chosen one included —
+     and announce `idle`. The person picked a side and lost both. */
+  it('keeps every candidate when the chosen side could not be written', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('termine', record(A, 1, { title: 'hier' }));
+    tree.conflictOn('wochenwerk/termine', decorated, JSON.stringify(record(A, 9, { title: 'dort' })));
+    tree.at('wochenwerk/termine')!.failWrites = 'locked by the sync client';
+
+    const after = await store.resolve('termine', A, decorated);
+    expect(after.kind).toBe('stale');
+    const files = tree.at('wochenwerk/termine')!.files;
+    expect([...files.keys()].sort()).toEqual([decorated, `${A}.json`].sort());
+    expect(files.get(decorated)).toContain('dort');
+    expect(files.get(`${A}.json`)).toContain('hier');
+  });
+
+  it('keeps every candidate when the store was already stale', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('termine', record(A, 1, { title: 'hier' }));
+    tree.conflictOn('wochenwerk/termine', decorated, JSON.stringify(record(A, 9, { title: 'dort' })));
+    tree.at('wochenwerk/termine')!.failWrites = 'disk full';
+    await store.write('termine', record(B));
+    expect(store.status.kind).toBe('stale');
+    tree.at('wochenwerk/termine')!.failWrites = null;
+
+    expect((await store.resolve('termine', A, decorated)).kind).toBe('stale');
+    const files = tree.at('wochenwerk/termine')!.files;
+    expect(files.get(decorated)).toContain('dort');
+    expect(files.get(`${A}.json`)).toContain('hier');
+  });
+
   it('leaves an ordinary folder alone', async () => {
     const tree = new FakeTree();
     const store = make(tree);
