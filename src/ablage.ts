@@ -15,6 +15,7 @@
  */
 
 import { readFolder, writeFolder, forgetFolder } from './store.js';
+import { put } from './put.js';
 import type { AblageOptions, AblageStatus, Adoption, Conflict, Change, Listed, Stored, Written } from './types.js';
 
 export type { AblageOptions, AblageStatus, Adoption, Conflict, Change, Listed, Stored, Written };
@@ -33,8 +34,6 @@ type Dir = FileSystemDirectoryHandle & {
    This rule is reasoned about and has been tested against one client; see the
    open question in adr/0001 before trusting it against the others. */
 const CANONICAL = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.json$/i;
-/* The mark that says this folder is a store. A plain name rather than a dotted
-   one: sync clients treat dotfiles inconsistently, and this file has to travel. */
 /* What a file is called after its id. A folder somebody opens should show
    pictures and recordings, not a pile of `x.bin` — and the type is what a
    product already knows about its own bytes. Anything unrecognised keeps `bin`,
@@ -46,6 +45,8 @@ const ENDINGS: Record<string, string> = {
 };
 const endingFor = (type: string) => ENDINGS[type.toLowerCase().split(';')[0].trim()] ?? 'bin';
 
+/* The mark that says this folder is a store. A plain name rather than a dotted
+   one: sync clients treat dotfiles inconsistently, and this file has to travel. */
 const MARK = 'adopted.json';
 
 /* Telling the other Lautstark programmes which folder this one uses.
@@ -256,7 +257,6 @@ export class Ablage {
 
   /* ------------------------------------------------------------- reading --- */
 
-  /** The folder for one kind of record, made if it is not there yet. */
   /* The app's own directory, above its kinds. Only the mark lives here — a
      product's records always live in a kind. */
   async #app(create = false): Promise<Dir | null> {
@@ -268,6 +268,7 @@ export class Ablage {
     }
   }
 
+  /** The folder for one kind of record, made if it is not there yet. */
   async #dir(kind: string, create = false): Promise<Dir | null> {
     if (!this.#folder) return null;
     if (!this.#options.kinds.includes(kind)) throw new Error(`unknown kind: ${kind}`);
@@ -369,13 +370,10 @@ export class Ablage {
     const dir = await this.#dir(kind, true);
     if (!dir) return this.#gone('the folder could not be opened');
     try {
-      const file = await dir.getFileHandle(`${record.id}.json`, { create: true });
-      const writable = await file.createWritable();
       /* `v` last, so it reads at the foot of the file rather than above the
          record's own fields — this is a file a person opens when something has
          gone wrong, and the shape number is not what they came for. */
-      await writable.write(JSON.stringify({ ...record, v: this.#version }, null, 2));
-      await writable.close();
+      await put(dir, `${record.id}.json`, JSON.stringify({ ...record, v: this.#version }, null, 2));
       this.#seen.set(`${kind}/${record.id}`, Number(record.updatedAt) || 0);
       return this.#ok();
     } catch (error) {
@@ -412,7 +410,6 @@ export class Ablage {
 
   /* ------------------------------------------------------------ noticing --- */
 
-  /** What changed since the last look. The product drives the rhythm. */
   /* What a file manager would show at the top of the chosen folder.
    *
    * Products use it for two things and the package should stay ignorant of both:
@@ -556,10 +553,7 @@ export class Ablage {
     const app = await this.#app(true);
     if (!app) { this.#gone('the folder could not be opened'); return { adopted: false, reason: 'unreachable', written }; }
     try {
-      const file = await app.getFileHandle(MARK, { create: true });
-      const writable = await file.createWritable();
-      await writable.write(JSON.stringify({ app: this.#options.app, at: Date.now() }, null, 2));
-      await writable.close();
+      await put(app, MARK, JSON.stringify({ app: this.#options.app, at: Date.now() }, null, 2));
     } catch (error) {
       this.#gone((error as Error)?.message ?? 'the mark could not be written');
       return { adopted: false, reason: 'unreachable', written };
@@ -608,10 +602,7 @@ export class Ablage {
       const old = await this.#fileFor(dir, id);
       const name = `${id}.${endingFor(blob.type)}`;
       if (old && old !== name) await dir.removeEntry(old).catch(() => undefined);
-      const file = await dir.getFileHandle(name, { create: true });
-      const writable = await file.createWritable();
-      await writable.write(blob);
-      await writable.close();
+      await put(dir, name, blob);
       return this.#ok();
     } catch (error) {
       return this.#gone((error as Error)?.message ?? 'the file could not be written');
@@ -642,6 +633,7 @@ export class Ablage {
     return [...found].sort();
   }
 
+  /** What changed since the last look. The product drives the rhythm. */
   async poll(): Promise<Change[]> {
     const changes: Change[] = [];
     const now = new Map<string, number>();

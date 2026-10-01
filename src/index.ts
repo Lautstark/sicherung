@@ -45,6 +45,7 @@
  */
 
 import { forgetFolder, readFolder, readMark, writeFolder, writeMark } from './store.js';
+import { put } from './put.js';
 import type { Options, Status } from './types.js';
 
 export type { Options, Status } from './types.js';
@@ -336,12 +337,12 @@ export class Sicherung {
         const at = this.#now();
         const stamp = dayStamp(at);
 
-        await this.#put(folder, `${this.#stem}-aktuell.json`, text);
+        await put(folder, `${this.#stem}-aktuell.json`, text);
         // One dated copy per day. Dropbox keeps versions of its own, but a
         // folder on a plain disk does not, and this is the half that has to
         // work without a sync client under it.
         if (lastDated !== stamp) {
-          await this.#put(folder, `${this.#stem}-${stamp}.json`, text);
+          await put(folder, `${this.#stem}-${stamp}.json`, text);
           await this.#prune(folder);
         }
 
@@ -356,30 +357,6 @@ export class Sicherung {
         return;
       }
     } while (this.#dirty);
-  }
-
-  /**
-   * One file, replaced.
-   *
-   * `createWritable()` is already atomic and nothing here needs to help it:
-   * the browser writes to a swap file and swaps it in at `close()`, so a tab
-   * killed mid-write leaves the previous copy whole rather than a half file.
-   * Writing into the real file by hand — or building a temp-and-rename dance
-   * on top — would be strictly worse, and `FileSystemDirectoryHandle` has no
-   * rename to build it with anyway.
-   */
-  async #put(folder: FileSystemDirectoryHandle, name: string, text: string): Promise<void> {
-    const file = await folder.getFileHandle(name, { create: true });
-    const writable = await file.createWritable();
-    try {
-      await writable.write(text);
-    } catch (error) {
-      // Abort rather than close: closing would commit whatever did get
-      // written, which is the truncation this whole method exists to avoid.
-      await writable.abort?.().catch(() => undefined);
-      throw error;
-    }
-    await writable.close();
   }
 
   /** Keeps the newest `keep` dated copies and removes the rest. */

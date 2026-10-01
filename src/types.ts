@@ -174,11 +174,6 @@ export interface AblageOptions {
   now?: () => number;
 }
 
-/* The two fields this package learns. `Sicherung` knows nothing at all about what
-   it writes; a filename has to come from somewhere, and a conflict cannot be
-   reported without something to report about the two sides. conventions.md §1.1
-   already makes identity a UUID and §1.4 already gives `updatedAt` a reader, so
-   this is a filename convention rather than a new obligation. */
 /** What `adopt` did, and where it stopped if it stopped. */
 export interface Adoption {
   adopted: boolean;
@@ -196,6 +191,11 @@ export interface Written {
   missed: Stored[];
 }
 
+/* The two fields this package learns. `Sicherung` knows nothing at all about what
+   it writes; a filename has to come from somewhere, and a conflict cannot be
+   reported without something to report about the two sides. conventions.md §1.1
+   already makes identity a UUID and §1.4 already gives `updatedAt` a reader, so
+   this is a filename convention rather than a new obligation. */
 export interface Stored {
   id: string;
   updatedAt: number;
