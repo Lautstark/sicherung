@@ -147,10 +147,11 @@ export interface AblageOptions {
    * to `<folder>/wortschatz/` and prompts for nothing, because `bildhaft`
    * already asked.
    *
-   * A follower cannot `choose()` or `forget()`. Both are answers about *which
-   * folder*, and that question belongs to whoever asked it; a follower doing
-   * either would move or drop the leader's store as a side effect of tidying a
-   * compartment. It restores, reads, writes and watches like any other.
+   * A follower cannot `choose()`, `forget()` or `nest()`. All three are answers
+   * about *which folder*, and that question belongs to whoever asked it; a
+   * follower doing any of them would move or drop the leader's store as a side
+   * effect of tidying a compartment. It restores, reads, writes and watches
+   * like any other.
    */
   follows?: string;
   /** One folder per kind of record. A product declares what it keeps. */

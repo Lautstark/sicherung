@@ -64,3 +64,22 @@ describe('what a panel says', () => {
     for (const status of every) expect(lineFor(status).key).toBeTruthy();
   });
 });
+
+/* A follower throws on choose and forget — which folder is the leader's
+   question — so offering either is offering an error. */
+describe('what a follower is offered', () => {
+  const follower: Keeper = { ...store, follows: 'bildhaft' };
+  const of = (status: AblageStatus) => actionsFor(follower, status).map((a) => a.id);
+
+  it('never offers to choose or forget the folder', () => {
+    expect(of({ kind: 'off' })).toEqual([]);
+    expect(of({ kind: 'idle', folder: 'F' })).toEqual([]);
+    expect(of({ kind: 'conflicted', folder: 'F', ids: ['a'] })).toEqual([]);
+  });
+
+  it('still puts a permission back and tries again', () => {
+    expect(of({ kind: 'needs-permission', folder: 'F' })).toEqual(['confirm']);
+    expect(of({ kind: 'stale', folder: 'F', reason: 'x' })).toEqual(['retry']);
+    expect(actionsFor(follower, { kind: 'failed', folder: 'F', reason: 'x' })[0].primary).toBe(true);
+  });
+});

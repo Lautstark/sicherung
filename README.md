@@ -117,12 +117,16 @@ Haushalt/
   wortschatz/   ← shared, and what another product would follow too
 ```
 
-A follower **cannot `choose()` or `forget()`** — both throw. Both answer "which
-folder", and that answer belongs to whoever asked the person for it: a follower
-choosing would move the leader's store and a follower forgetting would drop it.
-Neither is a state a caller could recover from by reading a status afterwards,
-so it is loud, and it is a wiring mistake made once at construction. Everything
-else — restore, read, write, watch, conflicts — works as it does anywhere.
+A follower **cannot `choose()`, `forget()` or `nest()`** — all three throw. They
+answer "which folder", and that answer belongs to whoever asked the person for
+it: a follower choosing or nesting would move the leader's store and a follower
+forgetting would drop it. None is a state a caller could recover from by
+reading a status afterwards, so it is loud, and it is a wiring mistake made once
+at construction. Everything else — restore, read, write, watch, conflicts — works
+as it does anywhere.
+
+`store.follows` names the leader, and `actionsFor` and both panels read it, so a
+follower is never offered a button that would throw.
 
 ### Options
 

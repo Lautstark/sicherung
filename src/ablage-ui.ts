@@ -14,7 +14,9 @@
 import type { Ablage } from './ablage.js';
 import type { AblageStatus } from './types.js';
 
-export type Keeper = Pick<Ablage, 'choose' | 'confirm' | 'forget'>;
+/* `follows` is optional so that every `Keeper` written before it still is one:
+   absent reads as "not a follower", which is what those were. */
+export type Keeper = Pick<Ablage, 'choose' | 'confirm' | 'forget'> & { readonly follows?: string };
 
 export interface AblageAction {
   id: 'choose' | 'confirm' | 'retry' | 'forget';
@@ -28,6 +30,17 @@ export const needsAttention = (status: AblageStatus): boolean =>
   || status.kind === 'stale' || status.kind === 'conflicted';
 
 export function actionsFor(store: Keeper, status: AblageStatus): AblageAction[] {
+  /* A follower borrows the folder and throws on `choose` and `forget`, because
+     which folder is the leader's question. A button that can only throw is not
+     an action, so neither is offered — what is left is what a follower can do:
+     put a withdrawn permission back, and try again. */
+  const all = offered(store, status);
+  return store.follows === undefined
+    ? all
+    : all.filter((action) => action.id !== 'choose' && action.id !== 'forget');
+}
+
+function offered(store: Keeper, status: AblageStatus): AblageAction[] {
   const choose: AblageAction = { id: 'choose', primary: true, run: () => store.choose() };
   const forget: AblageAction = { id: 'forget', primary: false, run: () => store.forget() };
   switch (status.kind) {

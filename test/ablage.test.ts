@@ -840,4 +840,21 @@ describe('following another Ablage’s folder', () => {
     await expect(follower.forget()).rejects.toThrow(/cannot forget/);
     expect(leader.handle()).not.toBeNull();
   });
+
+  /* `nest` writes the shared key, so a follower nesting stepped the leader's
+     remembered folder one level down: on the next start the leader and every
+     other follower would open an empty `Lautstark/` inside the real store. */
+  it('refuses to nest, because that would move the leader too', async () => {
+    const tree = new FakeTree();
+    const leader = make(tree);
+    await leader.choose();
+    const follower = shared();
+    await follower.restore();
+
+    expect(follower.follows).toBe('wochenwerk');
+    expect(leader.follows).toBeUndefined();
+    await expect(follower.nest('Lautstark')).rejects.toThrow(/cannot nest/);
+    expect(folders.get('ablage:wochenwerk')).toBe(tree);
+    expect([...tree.dirs.keys()]).toEqual([]);
+  });
 });

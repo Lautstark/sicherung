@@ -192,13 +192,26 @@ export class Ablage {
     return this.#options.follows !== undefined;
   }
 
-  /* The two calls a follower must not make.
+  /** The app whose folder this one borrows, if it borrows one.
    *
-   * Both answer "which folder", and that answer belongs to whoever asked the
-   * person for it. A follower choosing would move the leader's store; a
-   * follower forgetting would drop it. Neither is a state a caller could
-   * recover from by reading a status, so this is loud rather than quiet: it is
-   * a wiring mistake, made once, at the point the Ablage is constructed. */
+   *  Public so that a panel can leave out what a follower may not do: offering
+   *  a button that throws is offering an error, and `ablage-ui` and both panels
+   *  read this rather than catching it after the press. */
+  get follows(): string | undefined {
+    return this.#options.follows;
+  }
+
+  /* The three calls a follower must not make.
+   *
+   * All three answer "which folder", and that answer belongs to whoever asked
+   * the person for it. A follower choosing would move the leader's store; a
+   * follower forgetting would drop it; a follower nesting would step the
+   * leader's remembered folder one level down, because `nest` writes the
+   * shared key — so every product following and the leader itself would open
+   * a different, empty folder on their next start. None of these is a state a
+   * caller could recover from by reading a status, so this is loud rather than
+   * quiet: it is a wiring mistake, made once, at the point the Ablage is
+   * constructed. */
   #refuse(verb: string): never {
     throw new TypeError(
       `Ablage "${this.#options.app}" follows "${this.#options.follows}" and cannot ${verb}(): `
@@ -595,6 +608,7 @@ export class Ablage {
    * for byte would make a second level on exactly the machines where the first
    * folder was found. */
   async nest(name: string): Promise<AblageStatus> {
+    if (this.#following) this.#refuse('nest');
     if (!this.#folder) return this.#status;
     /* Already standing in it. The folder is the one that was asked for, and it
        is already the remembered one — `choose` or an earlier `nest` wrote it. */
