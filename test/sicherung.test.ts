@@ -305,6 +305,62 @@ describe('forgetting', () => {
     expect(folders.has('testprodukt')).toBe(false);
     expect(folder.files.size).toBeGreaterThan(0);
   });
+
+  /* A write in flight across forget() used to finish the job: it wrote its
+     mark back after forgetFolder had deleted it, and announced idle with the
+     forgotten folder's name — a panel showing a backup that had just been
+     switched off. */
+  it('stays forgotten when a write was already running', async () => {
+    const folder = new FakeFolder();
+    let release: () => void = () => {};
+    let slow = false;
+    const backup = make(folder, {
+      produce: async () => {
+        if (slow) await new Promise<void>((done) => { release = done; });
+        return { sentences: ['hallo'] };
+      },
+    });
+    await backup.choose();
+    const before = folder.writes;
+    slow = true;
+    const running = backup.save();
+    await new Promise((done) => setTimeout(done, 0));
+
+    await backup.forget();
+    release();
+    await running;
+    expect(backup.status).toEqual({ kind: 'off' });
+    expect(marks.has('testprodukt')).toBe(false);
+    expect(folder.writes).toBe(before);
+  });
+
+  it('writes into the newly chosen folder, not the one it started with', async () => {
+    const first = new FakeFolder('A');
+    const second = new FakeFolder('B');
+    let release: () => void = () => {};
+    let slow = false;
+    let round = 0;
+    const backup = make(first, {
+      produce: async () => {
+        round++;
+        if (slow && round === 2) await new Promise<void>((done) => { release = done; });
+        return { round };
+      },
+    });
+    await backup.choose();
+    slow = true;
+    const running = backup.save();
+    await new Promise((done) => setTimeout(done, 0));
+
+    vi.stubGlobal('showDirectoryPicker', pickerFor(second));
+    const choosing = backup.choose();
+    await new Promise((done) => setTimeout(done, 0));
+    release();
+    await Promise.all([running, choosing]);
+    expect(backup.status).toMatchObject({ kind: 'idle', folder: 'B' });
+    expect(JSON.parse(first.files.get('testprodukt-aktuell.json')!)).toEqual({ round: 1 });
+    expect(second.files.has('testprodukt-aktuell.json')).toBe(true);
+  });
 });
 
 describe('the inlet', () => {

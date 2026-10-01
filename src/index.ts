@@ -337,10 +337,27 @@ export class Sicherung {
       const folder = this.#folder;
       if (!folder) return;
 
+      /*
+       * Whether this run is still writing for the folder it started with.
+       *
+       * Every await below is a point at which `forget()` or `choose()` can have
+       * run. Without asking, a write in flight across a `forget()` wrote its
+       * mark back after `forgetFolder` had deleted it and announced `idle`
+       * with the forgotten folder's name — a panel showing a backup that had
+       * just been switched off, and a stale age waiting for the next folder.
+       * So after each await that precedes a side effect the run asks, and if
+       * the folder has moved it stops touching anything: no file, no mark, no
+       * status. A save asked for meanwhile — `choose` asks for one — is what
+       * the `#dirty` loop below then picks up, with the folder that is current.
+       */
+      const ours = () => this.#folder === folder;
+
       const { lastWrite, lastDated, lastEmpty = false } = await readMark(this.#app);
+      if (!ours()) continue;
       this.#announce({ kind: 'saving', folder: folder.name, lastWrite });
 
       if (!(await this.#has('granted'))) {
+        if (!ours()) continue;
         // Not a failure. The folder is fine and the user has to click.
         this.#announce({ kind: 'needs-permission', folder: folder.name, lastWrite });
         return;
@@ -352,6 +369,7 @@ export class Sicherung {
         // truncate it. This is also the only line through which anything the
         // product knows reaches this module.
         const produced = await this.#produce();
+        if (!ours()) continue;
         const empty = this.#looksEmpty?.(produced) ?? false;
 
         // Nothing to save, over something worth keeping. Hold, and say so.
@@ -377,6 +395,7 @@ export class Sicherung {
         const stamp = dayStamp(at);
 
         await put(folder, `${this.#stem}-aktuell.json`, text);
+        if (!ours()) continue;
         // One dated copy per day. Dropbox keeps versions of its own, but a
         // folder on a plain disk does not, and this is the half that has to
         // work without a sync client under it.
@@ -385,9 +404,12 @@ export class Sicherung {
           await this.#prune(folder);
         }
 
+        if (!ours()) continue;
         await writeMark(this.#app, { lastWrite: at, lastDated: stamp, lastEmpty: empty });
+        if (!ours()) continue;
         this.#announce({ kind: 'idle', folder: folder.name, lastWrite: at });
       } catch (error) {
+        if (!ours()) continue;
         // The folder is kept. A full disk, a folder the user moved, a file
         // locked by the sync client — none of those mean the choice was wrong.
         this.#announce({
