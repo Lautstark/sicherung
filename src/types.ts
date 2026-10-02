@@ -189,7 +189,9 @@ export interface Adoption {
   adopted: boolean;
   /** `already`: the folder is a store — read it rather than pushing over it.
       `incomplete`: not everything landed, so the folder was left unmarked.
-      `unreachable`: everything landed but the mark could not be written. */
+      `unreachable`: everything landed but the mark could not be written - or
+      the folder could not be read to see whether it is a store, so nothing
+      was written at all (`written: 0`, status `stale`). */
   reason?: 'already' | 'incomplete' | 'unreachable';
   written: number;
 }

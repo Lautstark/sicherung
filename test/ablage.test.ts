@@ -419,6 +419,38 @@ describe('becoming the store', () => {
     expect(await second.adopt({ termine: [record(B)] })).toEqual({ adopted: false, reason: 'already', written: 0 });
     expect((await second.list('termine')).map(item => item.id)).toEqual([A]);
   });
+
+  /* The mark is how a second machine knows not to push. A mark it cannot read
+     - a sync client's lock, a permission gone - used to read as no mark, and
+     the second machine pushed its copy over the household's. */
+  it('pushes nothing over a folder whose mark it cannot read', async () => {
+    const tree = new FakeTree();
+    const first = make(tree);
+    await first.choose();
+    await first.adopt({ termine: [record(A)] });
+
+    const second = make(tree);
+    await second.choose();
+    const app = tree.at('wochenwerk')!;
+    const read = app.getFileHandle.bind(app);
+    app.getFileHandle = async (name: string, options?: { create?: boolean }) => {
+      if (name === 'adopted.json') throw new Error('locked');
+      return read(name, options);
+    };
+
+    expect(await second.adopted()).toBe(false);
+    expect(second.status).toMatchObject({ kind: 'stale', reason: 'locked' });
+    expect(await second.adopt({ termine: [record(B)] })).toEqual({ adopted: false, reason: 'unreachable', written: 0 });
+    expect([...tree.at('wochenwerk/termine')!.files.keys()]).toEqual([`${A}.json`]);
+  });
+
+  it('still reads a folder with no mark as not a store, and stays idle', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    expect(await store.adopted()).toBe(false);
+    expect(store.status.kind).toBe('idle');
+  });
 });
 
 describe('a batch of writes', () => {
@@ -856,5 +888,41 @@ describe('following another Ablage’s folder', () => {
     await expect(follower.nest('Lautstark')).rejects.toThrow(/cannot nest/);
     expect(folders.get('ablage:wochenwerk')).toBe(tree);
     expect([...tree.dirs.keys()]).toEqual([]);
+  });
+});
+
+describe('reading a whole kind', () => {
+  /* A record the browser could not read used to be left out, with the status
+     still idle, and the product replaced its mirror with the part it got. */
+  it('says stale rather than handing over part of a kind', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('termine', record(A));
+    await store.write('termine', record(B));
+    const kind = tree.at('wochenwerk/termine')!;
+    const read = kind.getFileHandle.bind(kind);
+    kind.getFileHandle = async (name: string, options?: { create?: boolean }) => {
+      if (name === `${B}.json`) throw new Error('locked');
+      return read(name, options);
+    };
+    expect(await store.all('termine')).toEqual([]);
+    expect(store.status).toMatchObject({ kind: 'stale', reason: 'locked' });
+  });
+
+  it('leaves out a record deleted between the listing and the read', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('termine', record(A));
+    await store.write('termine', record(B));
+    const kind = tree.at('wochenwerk/termine')!;
+    const read = kind.getFileHandle.bind(kind);
+    kind.getFileHandle = async (name: string, options?: { create?: boolean }) => {
+      if (name === `${B}.json`) throw Object.assign(new Error('gone'), { name: 'NotFoundError' });
+      return read(name, options);
+    };
+    expect((await store.all('termine')).map(item => item.id)).toEqual([A]);
+    expect(store.status.kind).toBe('idle');
   });
 });

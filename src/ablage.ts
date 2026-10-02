@@ -430,12 +430,25 @@ export class Ablage {
     if (!dir) return [];
     const records: Stored[] = [];
     try {
+      let vanished = false;
       for (const name of await this.#names(dir)) {
         if (!CANONICAL.test(name)) continue;
-        const text = await this.#text(dir, name);
+        /* Not #text(), which answers null to every failure: a file that
+           could not be read used to be left out with the status still idle,
+           and the product replaced its mirror with the part it was given. A
+           file deleted between the listing and the read is the one failure
+           that may be left out - and only if the folder is still there. */
+        let text: string | null = null;
+        try {
+          text = await (await (await dir.getFileHandle(name)).getFile()).text();
+        } catch (error) {
+          if (!missing(error)) throw error;
+          vanished = true;
+        }
         const record = text && this.#parse(text);
         if (record) records.push(record);
       }
+      if (vanished) await this.#folder?.keys?.().next();
     } catch (error) {
       this.#gone(why(error, 'the folder could not be read'));
       return [];
@@ -647,8 +660,42 @@ export class Ablage {
    * thing to a reader, and reading either back over a full local copy is how a
    * week gets deleted. It happened. The mark is what tells them apart. */
   async adopted(): Promise<boolean> {
-    const app = await this.#app();
-    return !!app && (await this.#text(app, MARK)) !== null;
+    try {
+      return await this.#marked();
+    } catch (error) {
+      /* Neither answer is safe for a mark that could not be read: "a store"
+         sends the product to read the folder over its copy, "not a store"
+         lets adopt() push this browser's copy over a shared folder. So the
+         folder is stale, which stops both - a write refuses until somebody
+         confirms - and false is only what the boolean has to say. */
+      this.#gone(why(error, 'the folder could not be read'));
+      return false;
+    }
+  }
+
+  /* The mark, asked the way #reach asks for a kind: `NotFoundError` is "not
+   * there", every other failure is "cannot get there" and throws. It used to
+   * be #app() and #text(), which both answered null to everything - so a mark
+   * the browser could not read, behind a lost permission or a sync client's
+   * lock, read as a folder that was never a store. */
+  async #marked(): Promise<boolean> {
+    const root = this.#folder;
+    if (!root) return false;
+    let app: Dir;
+    try {
+      app = (await root.getDirectoryHandle(this.#options.app)) as Dir;
+    } catch (error) {
+      if (!missing(error)) throw error;
+      await root.keys?.().next();
+      return false;
+    }
+    try {
+      await (await app.getFileHandle(MARK)).getFile();
+      return true;
+    } catch (error) {
+      if (!missing(error)) throw error;
+      return false;
+    }
   }
 
   /* Make this folder the store, from what the product hands over.
@@ -660,6 +707,8 @@ export class Ablage {
    * from a second machine must not push that machine's copy over everybody's. */
   async adopt(everything: Record<string, Stored[]>): Promise<Adoption> {
     if (await this.adopted()) return { adopted: false, reason: 'already', written: 0 };
+    // adopted() said no because it could not tell: nothing is pushed.
+    if (this.#status.kind === 'stale') return { adopted: false, reason: 'unreachable', written: 0 };
     let written = 0;
     for (const [kind, records] of Object.entries(everything)) {
       const done = await this.writeAll(kind, records);
