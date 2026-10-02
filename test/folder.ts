@@ -128,6 +128,8 @@ export class FakeTree {
   failWrites: string | null = null;
   /** Counts attempts, so a test can prove a batch stopped rather than ran on. */
   writes = 0;
+  /** Counts listings, which on a share are the expensive thing. */
+  lists = 0;
   #permission: PermissionState = 'granted';
   #granting: PermissionState = 'granted';
 
@@ -174,6 +176,7 @@ export class FakeTree {
   }
 
   async *keys(): AsyncGenerator<string> {
+    this.lists++;
     for (const name of [...this.files.keys()]) yield name;
   }
   /** What a file manager shows: the directories as well as the files. */

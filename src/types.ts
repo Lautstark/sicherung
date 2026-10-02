@@ -166,6 +166,21 @@ export interface AblageOptions {
   /** One folder per kind of record. A product declares what it keeps. */
   kinds: readonly string[];
   /**
+   * The kinds that can hold a file beside a record — a card's picture, a
+   * button's recording. Absent means every kind can, which is how this behaved
+   * before it could be said.
+   *
+   * What it buys is the delete. A file is found by listing its kind's folder,
+   * because nothing writes its name down, and `remove` looked for one on every
+   * record of every kind. A calendar has no files at all and paid for the
+   * listing anyway, once per appointment: on a share across the house that was
+   * seconds per press, and a series with its edited days was that many times
+   * over. A kind left out of this is one `remove` does not list, and one
+   * `writeFile` refuses, so a product that forgets to declare a kind finds out
+   * on its first picture rather than by a folder filling up with orphans.
+   */
+  files?: readonly string[];
+  /**
    * The shape this build writes, stamped on every record as `v`.
    *
    * The Ablage is the one interface in this family that crosses a machine

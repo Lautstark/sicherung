@@ -368,6 +368,10 @@ export class Ablage {
   /* The name a record's file goes by, if it has one. Everything that is not the
      record itself and carries its id is it — which is how a file can be found
      again without the record having to remember what it was called. */
+  #holdsFiles(kind: string): boolean {
+    return this.#options.files?.includes(kind) ?? true;
+  }
+
   async #fileFor(dir: Dir, id: string): Promise<string | null> {
     for (const name of await this.#names(dir, '')) {
       if (name !== `${id}.json` && name.startsWith(`${id}.`)) return name;
@@ -513,8 +517,9 @@ export class Ablage {
         if (!missing(error)) throw error;
       });
       /* A record's file has no life of its own; leaving it behind would be a
-         picture nothing points at, filling a household's folder for years. */
-      const file = await this.#fileFor(dir, id);
+         picture nothing points at, filling a household's folder for years. Only
+         looked for where the kind can hold one — see `files`. */
+      const file = this.#holdsFiles(kind) ? await this.#fileFor(dir, id) : null;
       if (file) await dir.removeEntry(file).catch(() => undefined);
       this.#seen.delete(`${kind}/${id}`);
       return this.#ok();
@@ -765,6 +770,7 @@ export class Ablage {
    * record is the file. Deleting the record deletes it too. */
   async writeFile(kind: string, id: string, blob: Blob): Promise<AblageStatus> {
     filed(id);
+    if (!this.#holdsFiles(kind)) throw new Error(`no files declared for kind: ${kind}`);
     if (this.#status.kind === 'stale') return this.#status;
     const dir = await this.#dir(kind, true);
     if (!dir) return this.#unopened();

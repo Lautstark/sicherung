@@ -91,6 +91,19 @@ not a folder's. Raise `version` when the shape changes in a way an older build
 would *misread* — not when a field is added that an older build can ignore, which
 is most of them.
 
+### Which kinds hold files
+
+`writeFile` puts a picture or a recording beside a record, and `remove` takes it
+along — which means listing the kind's folder to find it, because nothing writes
+its name down. On a share that listing is the slow part of a delete. A product
+says which kinds can hold files, and `remove` lists only those:
+
+```js
+const store = new Ablage({ app: 'wochenwerk', kinds: KINDS, files: [] });
+```
+
+Absent means every kind can, as before. A kind left out refuses `writeFile`.
+
 ### A compartment several products share
 
 `app` names two things at once: the subtree inside the chosen folder, and the

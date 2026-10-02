@@ -707,6 +707,39 @@ describe('a file beside a record', () => {
     expect([...dir.files.keys()]).toEqual([]);
   });
 
+  it('is not looked for in a kind that holds none, so a delete is one call', async () => {
+    const tree = new FakeTree();
+    (globalThis as { showDirectoryPicker?: unknown }).showDirectoryPicker = async () => tree;
+    const store = new Ablage({ app: 'wochenwerk', kinds: KINDS, files: ['karten'] });
+    await store.choose();
+    await store.write('termine', record(A));
+    const dir = tree.dirs.get('wochenwerk')!.dirs.get('termine') as FakeTree;
+    const before = dir.lists;
+    await store.remove('termine', A);
+    expect(dir.lists).toBe(before);
+    expect([...dir.files.keys()]).toEqual([]);
+  });
+
+  it('still goes with its record in a kind declared to hold files', async () => {
+    const tree = new FakeTree();
+    (globalThis as { showDirectoryPicker?: unknown }).showDirectoryPicker = async () => tree;
+    const store = new Ablage({ app: 'wochenwerk', kinds: KINDS, files: ['karten'] });
+    await store.choose();
+    await store.write('karten', record(A));
+    await store.writeFile('karten', A, picture());
+    await store.remove('karten', A);
+    const dir = tree.dirs.get('wochenwerk')!.dirs.get('karten') as FakeTree;
+    expect([...dir.files.keys()]).toEqual([]);
+  });
+
+  it('is refused in a kind not declared to hold files, rather than orphaned later', async () => {
+    const tree = new FakeTree();
+    (globalThis as { showDirectoryPicker?: unknown }).showDirectoryPicker = async () => tree;
+    const store = new Ablage({ app: 'wochenwerk', kinds: KINDS, files: ['karten'] });
+    await store.choose();
+    await expect(store.writeFile('termine', A, picture())).rejects.toThrow('no files declared');
+  });
+
   it('stays out of the records, so a listing is still about ids', async () => {
     const tree = new FakeTree();
     const store = make(tree);
