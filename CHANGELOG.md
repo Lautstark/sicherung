@@ -1,3 +1,9 @@
+## [1.17.3](https://github.com/Lautstark/sicherung/compare/v1.17.2...v1.17.3) (2026-10-02)
+
+### Bug Fixes
+
+* **ablage:** a mark that cannot be read stops adoption, and a read that breaks off stops all() ([0e90a9d](https://github.com/Lautstark/sicherung/commit/0e90a9dfffc55cfc149b935dea7a8618cf07dd5b)), closes [#reach](https://github.com/Lautstark/sicherung/issues/reach)
+
 ## [1.17.2](https://github.com/Lautstark/sicherung/compare/v1.17.1...v1.17.2) (2026-10-01)
 
 ### Bug Fixes
