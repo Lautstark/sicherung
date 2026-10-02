@@ -1,3 +1,9 @@
+## [1.18.0](https://github.com/Lautstark/sicherung/compare/v1.17.3...v1.18.0) (2026-10-02)
+
+### Features
+
+* **ablage:** a product says which kinds hold files, and remove lists only those ([bc178a1](https://github.com/Lautstark/sicherung/commit/bc178a1ab874822292f6f3bf7405b6a8eb692e4f))
+
 ## [1.17.3](https://github.com/Lautstark/sicherung/compare/v1.17.2...v1.17.3) (2026-10-02)
 
 ### Bug Fixes
