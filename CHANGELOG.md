@@ -1,3 +1,9 @@
+## [1.19.0](https://github.com/Lautstark/sicherung/compare/v1.18.0...v1.19.0) (2026-10-31)
+
+### Features
+
+* **svelte:** DatenPanel — „Deine Daten“, one box with the answer, at most one button, everything else in its ⋯ ([00864f9](https://github.com/Lautstark/sicherung/commit/00864f987704b998435f4c2b293d56b0f972a6dc))
+
 ## [1.18.0](https://github.com/Lautstark/sicherung/compare/v1.17.3...v1.18.0) (2026-10-02)
 
 ### Features
