@@ -1,3 +1,9 @@
+## [1.20.0](https://github.com/Lautstark/sicherung/compare/v1.19.0...v1.20.0) (2026-10-31)
+
+### Features
+
+* **svelte:** DatenPanel — one folder: the daily copies go into the store's folder, and there is no second folder to choose ([e4b828f](https://github.com/Lautstark/sicherung/commit/e4b828f143f080f8fa7e3bbca2676720b7784fb9))
+
 ## [1.19.0](https://github.com/Lautstark/sicherung/compare/v1.18.0...v1.19.0) (2026-10-31)
 
 ### Features
