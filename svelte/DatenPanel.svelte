@@ -42,7 +42,7 @@
   import { WORDS as KEEP, sentenceFor } from '../dist/backup-panel.js';
   import { WORDS, headlineFor, unkept, type PanelLang } from '../dist/daten-panel.js';
   import type { Sicherung, Status } from '../dist/index.js';
-  import { actionsFor, needsAttention } from '../dist/ui.js';
+  import { actionsFor, ago, needsAttention } from '../dist/ui.js';
 
   let {
     store,
@@ -75,8 +75,9 @@
     };
     /** Deleting everything. The product asks before it does it, as it did. */
     wipe?: () => unknown;
-    /** The dated second copy. Offered only while the work is in the browser:
-     *  with a folder as the store, the folder is the copy. */
+    /** The dated copies. They go into the store's folder — `useFolder` with
+     *  its handle when one is settled on, `forget` when it is let go — so
+     *  there is one folder to choose, never two. */
     backup?: Sicherung | null;
     /** The words for the panel frame around this, beside „Deine Daten". */
     headline?: (text: string) => void;
@@ -117,9 +118,11 @@
   const named = $derived('folder' in status ? status.folder : '');
   const other = $derived(held ? null : announcedFolder());
   const following = $derived(store.follows !== undefined);
-  /* The second copy belongs to the browser-held store only, and only where
-     the browser can write a folder at all. */
-  const offersKeep = $derived(!held && keeping !== null && keeping.kind !== 'unsupported');
+  /* The dated copies go into the store's own folder — one folder, never a
+     second one to choose. Before 2026-10-31 a household could pick a separate
+     folder for them; one that did, and has no store folder, still sees it here
+     with a row to stop it, and is offered nothing new. */
+  const legacyKeep = $derived(!held && keeping !== null && keeping.kind !== 'off' && keeping.kind !== 'unsupported');
 
   $effect(() => headline?.(headlineFor(status, lang)));
 
@@ -152,6 +155,11 @@
     asking = null;
     if (nest) await store.nest(home);
     const went = await adopt();
+    /* The dated copies follow the work into its folder now, not on the next
+       start. The products did this only at boot, so a folder chosen during a
+       visit had no copies until a reload. */
+    const root = store.handle();
+    if (backup && root) await backup.useFolder(root).catch(() => undefined);
     say(went === 'pushed' ? where.pushed : went === 'pulled' ? where.pulled : where.incomplete);
     changed();
   }
@@ -189,14 +197,27 @@
     }
   });
 
-  /* The second copy's own state, under the box, while it has a folder. Its
-     button only where it needs somebody — the rest of its actions are rows. */
-  const keepLine = $derived(offersKeep && keeping && keeping.kind !== 'off' ? keeping : null);
+  /* The copies' own state, under the box. A button only where they need
+     somebody; stopping a separate folder from before is a row. */
+  const keepLine = $derived(
+    keeping && keeping.kind !== 'off' && keeping.kind !== 'unsupported' && (held || legacyKeep)
+      ? keeping : null,
+  );
   const keepAction = $derived(
     keepLine && backup && needsAttention(keepLine)
       ? actionsFor(backup, keepLine).find((action) => action.primary) ?? null
       : null,
   );
+  /* Beside the store the folder is already named in the box, so the line
+     only says how old the newest copy is. A separate folder (`legacyKeep`)
+     and anything needing attention keep the package's full sentence. */
+  const keepSays = $derived.by(() => {
+    if (!keepLine) return '';
+    if (!held || needsAttention(keepLine)) return sentenceFor(keepLine, lang);
+    if (keepLine.kind === 'saving') return words.copiesSaving;
+    return 'lastWrite' in keepLine && keepLine.lastWrite !== null
+      ? words.copies(ago(keepLine.lastWrite, lang)) : words.copiesNone;
+  });
 
   type Row = { label: string; note?: string; danger?: boolean; run: () => void } | 'rule';
 
@@ -207,17 +228,15 @@
         out.push({ label: words.another, note: words.anotherNote, run: press(choose) });
         out.push({
           label: words.forget, note: words.forgetNote,
-          run: press(async () => { await store.forget(); changed(); }),
+          run: press(async () => { await store.forget(); await backup?.forget(); changed(); }),
         });
       } else if (primary === null) {
         out.push({ label: words.pick, run: press(choose) });
       }
     }
-    if (offersKeep && backup) {
+    if (legacyKeep && backup) {
       const copy = backup;
-      out.push(keeping!.kind === 'off'
-        ? { label: words.keep, note: words.keepNote, run: press(() => copy.choose()) }
-        : { label: words.keepForget, run: press(async () => { await copy.forget(); say(KEEP[lang].forgotten); }) });
+      out.push({ label: words.keepForget, run: press(async () => { await copy.forget(); say(KEEP[lang].forgotten); }) });
     }
     if (out.length) out.push('rule');
     if (status.kind !== 'unsupported') {
@@ -344,7 +363,7 @@
     {#if keepLine}
       <p class={needsAttention(keepLine) ? 'standing notice bad' : 'standing'}
         data-state={keepLine.kind}><span class="dot"></span><span
-        >{sentenceFor(keepLine, lang)}</span></p>
+        >{keepSays}</span></p>
     {/if}
     {#if primary || keepAction}
       <div class="acts">

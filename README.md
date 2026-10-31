@@ -331,9 +331,12 @@ is in the `⋯` in the box's corner. Nothing the old column offered is gone.
   holds in this product.
 - **`wipe`** is optional. It is the last row of the menu, in red, and the
   product still asks before it deletes anything.
-- **`backup`** is the dated second copy (`Sicherung`). It is offered, and its
-  state line drawn, only while the work is in the browser — with a folder as
-  the store, the folder is the copy.
+- **`backup`** is the dated copies (`Sicherung`). They go into the store's own
+  folder: the panel calls `useFolder` with the store's handle when a folder is
+  settled on and `forget` when it is let go, and a product calls `useFolder` at
+  start when the store already holds one. There is no second folder to choose
+  since 1.20.0; a separate folder chosen before still shows, with a row to stop
+  it, while there is no store folder.
 - **`headline`** is told the few words for the panel frame; `headlineFor` in
   `@lautstark/sicherung/daten-panel` answers the same without the component.
 

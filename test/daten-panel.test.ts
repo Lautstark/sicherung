@@ -88,12 +88,44 @@ describe('DatenPanel', () => {
     expect(node.querySelector('.menu button:last-child')?.className).toBe('danger');
   });
 
-  it('offers the dated second copy only while the work is in the browser', () => {
+  it('offers no second folder for the copies anywhere', () => {
     const backup = stubBackup({ kind: 'off' });
-    const inBrowser = render({ store: stubStore({ kind: 'off' }), backup });
-    expect(openMenu(inBrowser)).toContain('Automatisch sichern in …');
-    const inFolder = render({ store: stubStore({ kind: 'idle', folder: 'L' }), backup });
-    expect(openMenu(inFolder)).not.toContain('Automatisch sichern in …');
+    for (const status of [{ kind: 'off' }, { kind: 'idle', folder: 'L' }] as AblageStatus[]) {
+      const rows = openMenu(render({ store: stubStore(status), backup }));
+      expect(rows.some((row) => row.startsWith('Automatisch sichern'))).toBe(false);
+    }
+  });
+
+  it('says how old the daily copy in the store folder is', () => {
+    const backup = stubBackup({ kind: 'idle', folder: 'L', lastWrite: Date.now() - 60_000 });
+    const node = render({ store: stubStore({ kind: 'idle', folder: 'L' }), backup });
+    expect(node.querySelector('.standing')?.textContent).toMatch(/^Tageskopie im selben Ordner, zuletzt/);
+  });
+
+  it('sends the copies into a folder settled on, and stops them when it is let go', async () => {
+    const backup = stubBackup({ kind: 'off' });
+    const useFolder = vi.fn(async () => backup.status);
+    Object.assign(backup, { useFolder });
+    const root = {};
+    let now: AblageStatus = { kind: 'off' };
+    let picked: object | null = null;
+    const store = {
+      ...stubStore({ kind: 'off' }),
+      get status() { return now; },
+      handle: () => picked,
+      choose: vi.fn(async () => { picked = root; now = { kind: 'idle', folder: 'L' }; return now; }),
+    };
+    const node = render({ store, backup });
+    (node.querySelector('.acts button') as HTMLButtonElement).click();
+    await new Promise((done) => setTimeout(done, 0));
+    expect(useFolder).toHaveBeenCalledWith(root);
+
+    const held = render({ store: stubStore({ kind: 'idle', folder: 'L' }), backup });
+    openMenu(held);
+    [...held.querySelectorAll<HTMLButtonElement>('.menu button')]
+      .find((b) => b.textContent?.startsWith('Ordner vergessen'))!.click();
+    await new Promise((done) => setTimeout(done, 0));
+    expect(backup.forget).toHaveBeenCalled();
   });
 
   it('runs a row inside the click, so a picker is still allowed to open', () => {

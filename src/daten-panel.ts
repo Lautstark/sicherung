@@ -53,8 +53,9 @@ export const WORDS = {
     anotherNote: 'Auch: auf den Ordner eines anderen Lautstark-Programms zeigen.',
     forget: 'Ordner vergessen',
     forgetNote: 'Die Dateien bleiben im Ordner. Hier liegt dann alles wieder nur im Browser.',
-    keep: 'Automatisch sichern in …',
-    keepNote: 'Schreibt bei jeder Änderung eine Kopie in einen zweiten Ordner.',
+    copies: (age: string) => `Tageskopie im selben Ordner, zuletzt ${age}.`,
+    copiesNone: 'Tageskopie im selben Ordner, noch keine geschrieben.',
+    copiesSaving: 'Tageskopie wird geschrieben …',
     keepForget: 'Automatisch sichern beenden',
     download: 'Sicherung herunterladen',
     downloadNote: 'Alles als eine Datei, zum Aufheben oder Mitnehmen.',
@@ -65,7 +66,7 @@ export const WORDS = {
     reasons: [
       'Der Browser darf seine Daten wegräumen, wenn der Speicher knapp wird oder jemand den Verlauf löscht.',
       'Ein Ordner in iCloud, Dropbox oder Nextcloud wird von deinem Rechner mitgesichert und ist auf jedem Gerät gleich. Es gibt kein Konto und keinen Server von uns.',
-      'Eine heruntergeladene Sicherung ist ein fester Stand. Sie hilft, wenn du selbst versehentlich etwas gelöscht hast.',
+      'Im Ordner liegt außerdem eine Kopie für jeden Tag, die letzten 14 Tage. Sie hilft, wenn du selbst versehentlich etwas gelöscht hast. Ohne Ordner tut das eine heruntergeladene Sicherung.',
     ],
   },
   en: {
@@ -93,8 +94,9 @@ export const WORDS = {
     anotherNote: 'Also: point at the folder of another Lautstark programme.',
     forget: 'Forget the folder',
     forgetNote: 'The files stay in the folder. Here, everything is only in the browser again.',
-    keep: 'Back up automatically to …',
-    keepNote: 'Writes a copy into a second folder whenever something changes.',
+    copies: (age: string) => `Daily copy in the same folder, last ${age}.`,
+    copiesNone: 'Daily copy in the same folder, none written yet.',
+    copiesSaving: 'Writing the daily copy …',
     keepForget: 'Stop backing up automatically',
     download: 'Download a backup',
     downloadNote: 'Everything as one file, to keep or to take along.',
@@ -105,7 +107,7 @@ export const WORDS = {
     reasons: [
       'A browser may clear its data when storage runs low or somebody clears the history.',
       'A folder in iCloud, Dropbox or Nextcloud is backed up by your computer and is the same on every device. There is no account and no server of ours.',
-      'A downloaded backup is a fixed state. It helps when you deleted something by mistake yourself.',
+      'The folder also holds a copy for each day, the last 14 days. It helps when you deleted something by mistake yourself. Without a folder, a downloaded backup does that.',
     ],
   },
 } as const;
