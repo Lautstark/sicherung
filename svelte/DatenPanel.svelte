@@ -12,20 +12,15 @@
    *   one button  only when something is the household's to do
    *   „Warum?"    folded
    *
-   * ## The menu is drawn here, not borrowed
+   * ## The menu is werkzeuge's
    *
    * conventions.md §6.0: a provider package does not gain design as a runtime
-   * dependency, so `@lautstark/design/svelte/Overflow` is not imported. What is
-   * kept is its vocabulary — `.menu-anchor > .menu > button[role=menuitem]`,
-   * `hr`, `.danger` — and its keyboard contract from components.css: opening
-   * moves focus to the first row, the arrows and Home/End walk the rows,
-   * Escape closes and hands focus back to the trigger.
-   *
-   * ## A row runs inside the click
-   *
-   * „Sicherung einlesen" opens a file picker and „Ordner wählen" a directory
-   * picker, and both are refused without a user gesture. So a row closes the
-   * menu and calls its job in the same click handler, before any await.
+   * dependency, so `@lautstark/design/svelte/Overflow` is not imported. This
+   * file drew the menu itself until bildquelle's and stimmquelle's panels
+   * needed the same one; it is `@lautstark/werkzeuge/svelte/MoreMenu` now,
+   * with the vocabulary, the keyboard contract and the upward fit this file
+   * had. A row runs inside the click, which is what lets „Sicherung einlesen"
+   * open a file picker and „Ordner wählen" a directory picker.
    *
    * ## What is kept from `AblagePanel`
    *
@@ -36,7 +31,7 @@
    *
    * Everything comes from `../dist`, for `BackupPanel.svelte`'s reason.
    */
-  import { tick } from 'svelte';
+  import MoreMenu, { type MenuRow } from '@lautstark/werkzeuge/svelte/MoreMenu';
   import { announcedFolder, type Ablage, type AblageStatus } from '../dist/ablage.js';
   import { WORDS as WHERE } from '../dist/ablage-panel.js';
   import { WORDS as KEEP, sentenceFor } from '../dist/backup-panel.js';
@@ -105,9 +100,6 @@
   let asking = $state<string | null>(null);
   let working = $state(false);
   let consented = $state.raw<boolean | null>(null);
-  let open = $state(false);
-  let trigger = $state<HTMLButtonElement>();
-  let list = $state<HTMLDivElement>();
   let picker = $state<HTMLInputElement>();
 
   const words = $derived(WORDS[lang]);
@@ -219,10 +211,8 @@
       ? words.copies(ago(keepLine.lastWrite, lang)) : words.copiesNone;
   });
 
-  type Row = { label: string; note?: string; danger?: boolean; run: () => void } | 'rule';
-
-  function rows(): Row[] {
-    const out: Row[] = [];
+  function rows(): MenuRow[] {
+    const out: MenuRow[] = [];
     if (supported && !following) {
       if (held) {
         out.push({ label: words.another, note: words.anotherNote, run: press(choose) });
@@ -247,68 +237,6 @@
     return out;
   }
 
-  const items = (): HTMLButtonElement[] =>
-    [...(list?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])];
-
-  async function toggle(): Promise<void> {
-    open = !open;
-    if (!open) return;
-    await tick();
-    fit();
-    items()[0]?.focus({ preventScroll: true });
-  }
-
-  /* Opens upward where there is more room above, and caps the height so the
-     list stays inside the sheet's scrolling body. The same arithmetic as
-     @lautstark/design/svelte/fit.js, which §6.0 keeps this from importing; the
-     class it toggles, `.menu-anchor--up`, is drawn by components.css. */
-  let up = $state(false);
-  let cap = $state<number | null>(null);
-  function fit(): void {
-    if (!list || !trigger) return;
-    /* The nearest box that scrolls, not `.closest('.body')`: inside a settings
-       sheet the first `.body` up is the Panel's own, which is as tall as this
-       block and would leave no room either way. */
-    let box: HTMLElement | null = trigger.parentElement;
-    while (box && !/auto|scroll/.test(getComputedStyle(box).overflowY)) box = box.parentElement;
-    const view = box ? box.getBoundingClientRect()
-      : new DOMRect(0, 0, window.innerWidth, window.innerHeight);
-    const at = trigger.getBoundingClientRect();
-    const below = view.bottom - at.bottom - 12;
-    const above = at.top - view.top - 12;
-    up = list.offsetHeight > below && above > below;
-    cap = Math.max(96, Math.floor(up ? above : below));
-  }
-
-  function close(refocus: boolean): void {
-    open = false;
-    up = false;
-    cap = null;
-    if (refocus) trigger?.focus();
-  }
-
-  function walk(event: KeyboardEvent): void {
-    const all = items();
-    const at = all.indexOf(document.activeElement as HTMLButtonElement);
-    const go = (to: number) => { event.preventDefault(); all[(to + all.length) % all.length]?.focus(); };
-    if (event.key === 'ArrowDown') go(at + 1);
-    else if (event.key === 'ArrowUp') go(at - 1);
-    else if (event.key === 'Home') go(0);
-    else if (event.key === 'End') go(all.length - 1);
-    else if (event.key === 'Escape') { event.preventDefault(); close(true); }
-    else if (event.key === 'Tab') close(false);
-  }
-
-  /* A press anywhere else closes it, as every other menu in the family does. */
-  $effect(() => {
-    if (!open) return;
-    const away = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (!list?.contains(target) && !trigger?.contains(target)) close(false);
-    };
-    document.addEventListener('pointerdown', away, true);
-    return () => document.removeEventListener('pointerdown', away, true);
-  });
 </script>
 
 <div {id} class="where-panel">
@@ -325,23 +253,7 @@
   {:else}
     <div class="where{unkept(status) ? ' bad' : ''}" data-state={status.kind}>
       <b><span class="dot"></span>{title}</b>
-      <span class="menu-anchor{up ? ' menu-anchor--up' : ''}">
-        <button bind:this={trigger} type="button" class="btn quiet icon" aria-label={words.more}
-          title={words.more} aria-haspopup="menu" aria-expanded={open}
-          onclick={() => void toggle()}>⋯</button>
-        {#if open}
-          <div bind:this={list} class="menu" role="menu" tabindex="-1" onkeydown={walk}
-            style:max-height={cap === null ? undefined : `${cap}px`} style:overflow-y="auto"
-            style:overscroll-behavior="contain">
-            {#each rows() as row, at (at)}
-              {#if row === 'rule'}<hr />{:else}<button type="button" role="menuitem"
-                class={row.danger ? 'danger' : undefined} disabled={working}
-                onclick={() => { close(false); row.run(); }}>{row.label}{#if row.note}<span
-                  class="menu__note">{row.note}</span>{/if}</button>{/if}
-            {/each}
-          </div>
-        {/if}
-      </span>
+      <MoreMenu label={words.more} rows={rows} disabled={working} />
       <span class="small faint">{note}</span>
     </div>
     {#if status.kind === 'conflicted'}

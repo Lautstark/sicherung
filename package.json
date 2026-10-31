@@ -91,6 +91,7 @@
     "prepare": "npm run build"
   },
   "dependencies": {
+    "@lautstark/werkzeuge": "github:Lautstark/werkzeuge#v2.1.0",
     "idb": "^8.0.3"
   },
   "peerDependencies": {
