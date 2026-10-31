@@ -42,6 +42,10 @@
       "types": "./dist/backup-panel.d.ts",
       "default": "./dist/backup-panel.js"
     },
+    "./daten-panel": {
+      "types": "./dist/daten-panel.d.ts",
+      "default": "./dist/daten-panel.js"
+    },
     "./svelte/BackupPanel": {
       "svelte": "./svelte/BackupPanel.svelte",
       "default": "./svelte/BackupPanel.svelte"
@@ -49,6 +53,10 @@
     "./svelte/AblagePanel": {
       "svelte": "./svelte/AblagePanel.svelte",
       "default": "./svelte/AblagePanel.svelte"
+    },
+    "./svelte/DatenPanel": {
+      "svelte": "./svelte/DatenPanel.svelte",
+      "default": "./svelte/DatenPanel.svelte"
     },
     "./svelte/Rescue": {
       "svelte": "./svelte/Rescue.svelte",
@@ -89,7 +97,7 @@
     "svelte": "^5"
   },
   "devDependencies": {
-    "@lautstark/design": "github:Lautstark/design#v1.33.1",
+    "@lautstark/design": "github:Lautstark/design#v1.41.0",
     "@semantic-release/changelog": "^7.0.0",
     "@semantic-release/git": "^11.0.1",
     "@sveltejs/vite-plugin-svelte": "^7.3.0",

@@ -73,6 +73,7 @@ import type { Sicherung, Status } from '../dist/index.js';
 import type { AblageStatus } from '../dist/ablage.js';
 import AblagePanel from '../svelte/AblagePanel.svelte';
 import BackupPanel from '../svelte/BackupPanel.svelte';
+import DatenPanel from '../svelte/DatenPanel.svelte';
 import Rescue from '../svelte/Rescue.svelte';
 import { Rescuing, type RescueWords } from '../svelte/rescuing.svelte.js';
 
@@ -253,6 +254,33 @@ describe('every class name the panels emit is drawn by components.css', () => {
     expect(node.querySelector('.tree')?.textContent).toContain('Haushalt');
     expect(missingFrom(node)).toEqual([]);
   });
+
+  const FILE = { download: () => {}, read: () => {} };
+
+  /* Drawn with the menu open, because the rows and their notes are most of
+     what this panel emits and none of it is in the tree while it is shut. */
+  it.each(ABLAGE_STATUSES.map((s) => [s.kind, s] as const))('svelte/DatenPanel, %s, menu open', (_kind, status) => {
+    const node = render(DatenPanel, {
+      store: stubStore(status), adopt: async () => 'pushed', changed: () => {}, say: () => {},
+      file: FILE, wipe: () => {}, share: { reads: () => false, write: async () => {} },
+    });
+    (node.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement).click();
+    flushSync();
+    expect(node.querySelector('.menu')).not.toBe(null);
+    expect(missingFrom(node)).toEqual([]);
+  });
+
+  it.each(STATUSES.filter((s) => s.kind !== 'unsupported').map((s) => [s.kind, s] as const))(
+    'svelte/DatenPanel, in the browser with a backup folder %s', (_kind, status) => {
+      const node = render(DatenPanel, {
+        store: stubStore({ kind: 'off' }), adopt: async () => 'pushed', changed: () => {}, say: () => {},
+        file: FILE, backup: stubBackup(status),
+      });
+      (node.querySelector('[aria-haspopup="menu"]') as HTMLButtonElement).click();
+      flushSync();
+      expect(missingFrom(node)).toEqual([]);
+    },
+  );
 
   it.each([['before the file is taken', false], ['after it', true]] as const)(
     'svelte/Rescue, %s', (_name, saved) => {

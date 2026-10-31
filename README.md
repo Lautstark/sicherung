@@ -304,6 +304,42 @@ styles these kinds by name. An unknown kind falls back to the grey `off` dot
 and reads as *deliberately not set up* — which is why a new `Status` kind is a
 major for the CSS as well as for this package.
 
+## „Deine Daten" — `@lautstark/sicherung/svelte/DatenPanel`
+
+The panel every product draws since 2026-10-31, in place of `AblagePanel`,
+`BackupPanel`, the product's own file buttons and a separate „Alles löschen"
+panel. One box says where the work is and whether that is safe; at most one
+button sits under it, and only when there is something to do; everything else
+is in the `⋯` in the box's corner. Nothing the old column offered is gone.
+
+```svelte
+<script>
+  import DatenPanel from '@lautstark/sicherung/svelte/DatenPanel';
+</script>
+
+<Panel section="Deine Daten" state={headline}>
+  <DatenPanel {store} {adopt} {changed} say={notify} {lang}
+    backup={backupOrNull}
+    file={{ download: exportAll, read: importFile, note: 'Was die Datei enthält.' }}
+    wipe={confirmWipe}
+    headline={(text) => headline = text} />
+</Panel>
+```
+
+- **`file`** is the product's whole-backup file: `download()` and
+  `read(file)`. The panel owns the hidden file input; `note` says what the file
+  holds in this product.
+- **`wipe`** is optional. It is the last row of the menu, in red, and the
+  product still asks before it deletes anything.
+- **`backup`** is the dated second copy (`Sicherung`). It is offered, and its
+  state line drawn, only while the work is in the browser — with a folder as
+  the store, the folder is the copy.
+- **`headline`** is told the few words for the panel frame; `headlineFor` in
+  `@lautstark/sicherung/daten-panel` answers the same without the component.
+
+Its classes (`.where .dot`, `.where > .menu-anchor`, `.menu__note`,
+`.where-why`) are drawn by `@lautstark/design` from v1.41.0.
+
 ## The same panels in Svelte — `@lautstark/sicherung/svelte/*`
 
 Since 1.17. The vanilla exports above stay until no consumer is left; these are
