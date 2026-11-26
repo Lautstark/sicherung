@@ -1,3 +1,9 @@
+## [1.21.0](https://github.com/Lautstark/sicherung/compare/v1.20.0...v1.21.0) (2026-11-26)
+
+### Features
+
+* **ablage:** a read is a memory, and a kind's folder is opened once ([d4157e1](https://github.com/Lautstark/sicherung/commit/d4157e1d3b20e5fd96c2985e709efc3645a36c57))
+
 ## [1.20.0](https://github.com/Lautstark/sicherung/compare/v1.19.0...v1.20.0) (2026-10-31)
 
 ### Features
