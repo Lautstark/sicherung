@@ -130,6 +130,8 @@ export class FakeTree {
   writes = 0;
   /** Counts listings, which on a share are the expensive thing. */
   lists = 0;
+  /** Counts directory openings, which on a share are the other one. */
+  opens = 0;
   #permission: PermissionState = 'granted';
   #granting: PermissionState = 'granted';
 
@@ -146,6 +148,7 @@ export class FakeTree {
   }
 
   async getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<FakeTree> {
+    this.opens++;
     const there = this.dirs.get(name);
     if (there) return there;
     if (!options?.create) throw notFound(name);

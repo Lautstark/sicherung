@@ -177,6 +177,114 @@ describe('records', () => {
   });
 });
 
+describe('what a read already knows', () => {
+  /* The start of a product reads the whole folder and then arms the watch, and
+     the watch's first poll used to have to read it all over again — otherwise
+     it called every file in the folder newly appeared and the product pulled
+     its own library back over itself (ADR 0001, wochenwerk). A read is a
+     memory of what is there, so it says so. */
+  it('leaves a poll after it with nothing to report', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    const here = tree.at('wochenwerk')
+      ?? (await tree.getDirectoryHandle('wochenwerk', { create: true }));
+    const records = await here.getDirectoryHandle('termine', { create: true });
+    records.files.set(`${A}.json`, JSON.stringify(record(A, 1)));
+    records.files.set(`${B}.json`, JSON.stringify(record(B, 1)));
+
+    expect((await store.all('termine')).map((one) => one.id).sort()).toEqual([A, B].sort());
+    expect(await store.poll()).toEqual([]);
+
+    /* And it is a memory of the stamps, not just of the names: what changed
+       after the read is still news. */
+    records.files.set(`${A}.json`, JSON.stringify(record(A, 2)));
+    expect(await store.poll()).toEqual([{ kind: 'termine', id: A, what: 'changed' }]);
+  });
+
+  it('keeps what it knew when the read could not reach the folder', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('termine', record(A, 1));
+    await store.poll();
+
+    const records = tree.at('wochenwerk/termine')!;
+    const listing = records.keys.bind(records);
+    records.keys = async function* () { throw new Error('NotReadableError'); };
+    expect(await store.all('termine')).toEqual([]);
+    expect(store.status.kind).toBe('stale');
+
+    /* And what it knew before is still there. An empty memory would be
+       "everything appeared" on the next look, and a product following
+       ADR 0001 would pull its own library back over itself. */
+    records.keys = listing;
+    await store.confirm();
+    expect(await store.poll()).toEqual([]);
+  });
+});
+
+describe('the folders it opens', () => {
+  /* Opening one is a question put to the browser process, and every read,
+     write and listing used to ask it twice over — the app's folder, then the
+     kind's. On a product's start against thirty-one records that was 82 of its
+     308 file-system calls. */
+  it('opens a kind once, however often it is read and written', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('termine', record(A, 1));
+    const app = tree.at('wochenwerk')!;
+    const openedApp = tree.opens;
+    const openedKind = app.opens;
+
+    await store.write('termine', record(B, 1));
+    await store.list('termine');
+    await store.all('termine');
+    await store.read('termine', A);
+
+    /* Nothing new was opened: four more passes over the same kind, through the
+       two handles the first write left behind — the app's folder and the
+       kind's. */
+    expect(tree.opens).toBe(openedApp);
+    expect(app.opens).toBe(openedKind);
+  });
+
+  it('opens it again after the folder has gone out of reach', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    await store.write('termine', record(A, 1));
+
+    const reach = tree.getDirectoryHandle.bind(tree);
+    tree.getDirectoryHandle = async () => { throw new Error('The request is not allowed'); };
+    /* Through the kept handle, which is the one that fails now. */
+    tree.at('wochenwerk/termine')!.keys = async function* () { throw new Error('NotReadableError'); };
+    expect(await store.all('termine')).toEqual([]);
+    expect(store.status.kind).toBe('stale');
+
+    tree.getDirectoryHandle = reach;
+    const back = new FakeTree('termine');
+    back.files.set(`${A}.json`, JSON.stringify(record(A, 1)));
+    tree.at('wochenwerk')!.dirs.set('termine', back);
+    await store.confirm();
+    /* A handle that could not answer is not kept: the folder coming back is
+       read through a fresh one. */
+    expect((await store.all('termine')).map((one) => one.id)).toEqual([A]);
+  });
+
+  it('finds a kind that nothing had been written to yet', async () => {
+    const tree = new FakeTree();
+    const store = make(tree);
+    await store.choose();
+    /* Asked before it exists — a `null` that must not be remembered, or the
+       first record ever written to that kind would be unreadable. */
+    expect(await store.all('karten')).toEqual([]);
+    await store.write('karten', record(A, 1));
+    expect((await store.all('karten')).map((one) => one.id)).toEqual([A]);
+  });
+});
+
 describe('noticing a change', () => {
   it('reports what appeared, changed and went', async () => {
     const tree = new FakeTree();

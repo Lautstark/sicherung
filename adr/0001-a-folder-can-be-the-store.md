@@ -164,7 +164,16 @@ both resolve to the status rather than throwing, because every state in this
 package is a state a panel can draw and an exception is not.
 
 **Noticing a change** is `poll()`, which relists the folder and reports which
-ids appeared, changed or went. The product drives the interval, because the
+ids appeared, changed or went. **A read counts as a look**: `all()` writes what
+it saw into the same memory `poll()` compares against, so a product that has
+just read the folder can arm its watch without reading it a second time. That
+second read was a third of a start on a share across the house — and leaving
+it out before this was not an option, because the first poll would have called
+every file in the folder newly appeared and the product would have pulled its
+own library back over itself (see the three findings at the foot of this file).
+A read that could *not* reach the folder changes nothing about what was seen,
+for the same reason it reports no records: an empty memory is "everything
+appeared". The product drives the interval, because the
 rhythm belongs to the product — wochenwerk's board wants seconds, a planning
 view wants far less — and `watch(ms)` is a convenience over it that stops on
 `forget()`. Whether `FileSystemObserver` is available and dependable in the

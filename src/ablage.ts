@@ -132,6 +132,28 @@ export class Ablage {
   #status: AblageStatus;
   #listeners = new Set<(status: AblageStatus) => void>();
   #seen = new Map<string, number>();
+  /*
+   * The kind folders already opened, by kind.
+   *
+   * Opening one is not free: it is a question put to the browser process, and
+   * every read, every write and every listing used to ask it twice over — the
+   * app's folder, then the kind's. Counted on a product's start against a
+   * folder of thirty-one records: 82 of its 308 file-system calls were
+   * directory openings, for eight reads. The handles are good for as long as
+   * the folder is.
+   *
+   * Promises rather than handles, because the misses arrive together: a start
+   * reads four kinds at once and would otherwise open each one four times.
+   * Dropped when a read or write through one fails, so a folder that was moved
+   * or whose permission was taken is opened afresh on the next attempt rather
+   * than being asked through a handle that cannot answer. Dropped wholesale
+   * when the folder itself changes.
+   *
+   * Only handles that were actually there are kept. A kind nothing has been
+   * written to yet answers `null`, and caching that would hide the first
+   * record ever written to it.
+   */
+  #opened = new Map<string, Promise<Dir>>();
   #timer: ReturnType<typeof setInterval> | null = null;
 
   #version: number;
@@ -227,6 +249,7 @@ export class Ablage {
     const folder = (await readFolder(this.#key)) as Dir | null;
     if (!folder) return this.#announce({ kind: 'off' });
     this.#folder = folder;
+    this.#opened.clear();
     return this.#announce(
       (await this.#allowed('granted'))
         ? { kind: 'idle', folder: folder.name }
@@ -251,6 +274,7 @@ export class Ablage {
       return this.#status;
     }
     this.#folder = folder;
+    this.#opened.clear();
     await writeFolder(this.#key, folder);
     return this.#announce({ kind: 'idle', folder: folder.name });
   }
@@ -271,6 +295,7 @@ export class Ablage {
     this.unwatch();
     await forgetFolder(this.#key);
     this.#folder = null;
+    this.#opened.clear();
     this.#seen.clear();
     return this.#announce(Ablage.supported ? { kind: 'off' } : { kind: 'unsupported' });
   }
@@ -339,6 +364,31 @@ export class Ablage {
    * was moved or deleted answers `NotFoundError` for everything inside it too.
    * Asking the chosen folder for its first name is what tells those apart. */
   async #reach(kind: string, create = false): Promise<Dir | null> {
+    const held = this.#opened.get(kind);
+    if (held) {
+      try {
+        return await held;
+      } catch {
+        /* Its own failure was already handled where it was opened; this is the
+           second caller of the same opening. Fall through and open afresh. */
+        if (this.#opened.get(kind) === held) this.#opened.delete(kind);
+      }
+    }
+    const opening = this.#open(kind, create);
+    /* Kept before it has answered, so four kinds read at once share one
+       opening each rather than queueing four of them. A `null` — the kind is
+       not there yet — is not kept; see #opened. */
+    this.#opened.set(kind, opening.then((dir) => {
+      if (!dir) throw new Error('not there');
+      return dir;
+    }));
+    this.#opened.get(kind)?.catch(() => {
+      if (this.#opened.get(kind)) this.#opened.delete(kind);
+    });
+    return opening;
+  }
+
+  async #open(kind: string, create: boolean): Promise<Dir | null> {
     const root = this.#folder;
     if (!root) return null;
     let app: Dir;
@@ -435,6 +485,9 @@ export class Ablage {
     const records: Stored[] = [];
     try {
       let vanished = false;
+      /* What this read saw, which is a memory of the folder as good as a
+         poll's — see the note at the foot of this method. */
+      const seen = new Map<string, number>();
       for (const name of await this.#names(dir)) {
         if (!CANONICAL.test(name)) continue;
         /* Not #text(), which answers null to every failure: a file that
@@ -450,9 +503,36 @@ export class Ablage {
           vanished = true;
         }
         const record = text && this.#parse(text);
-        if (record) records.push(record);
+        if (record) {
+          records.push(record);
+          seen.set(`${kind}/${record.id}`, Number(record.updatedAt) || 0);
+        }
       }
       if (vanished) await this.#folder?.keys?.().next();
+      /*
+       * **A read is a memory of what is there**, and `poll` is told so.
+       *
+       * `poll` reports what has appeared, changed or gone since the last time
+       * it looked, and it used to be the only thing that ever looked: a
+       * product that had just read the whole folder still had to let `poll`
+       * read it again, from end to end, before the watch could be armed —
+       * otherwise the first poll called every file in the folder newly
+       * appeared and the product pulled its own library back over itself.
+       * ADR 0001 records how that went in wochenwerk.
+       *
+       * So the start read the folder twice over, which on a share across the
+       * house is the whole of it. Writing what was read into `#seen` is what
+       * makes the second read unnecessary: a product can read and then arm the
+       * watch. Measured on a product's start against a folder of thirty-one
+       * records, this and the kept directory handles together took its
+       * file-system calls from 308 to 118.
+       *
+       * Only on the way out of a read that reached the folder. A read that
+       * could not is handled below, and must leave what was seen alone: an
+       * empty memory is "everything appeared", and the product would be told
+       * its household's whole library was new.
+       */
+      for (const [key, stamp] of seen) this.#seen.set(key, stamp);
     } catch (error) {
       this.#gone(why(error, 'the folder could not be read'));
       return [];
@@ -542,6 +622,9 @@ export class Ablage {
   /* A folder that has gone away is not an exception to catch: it is a state a
      panel draws, and the product serves its mirror read-only until it is back. */
   #gone(reason: string): AblageStatus {
+    /* Whatever could not be reached may have been reached through a handle
+       this is still holding. The next attempt opens the folder again. */
+    this.#opened.clear();
     return this.#announce({ kind: 'stale', folder: this.#folder?.name ?? '', reason });
   }
 
@@ -634,6 +717,7 @@ export class Ablage {
     try {
       const inside = (await this.#folder.getDirectoryHandle(name, { create: true })) as Dir;
       this.#folder = inside;
+      this.#opened.clear();
       await writeFolder(this.#key, inside);
       return this.#announce({ kind: 'idle', folder: inside.name });
     } catch (error) {
